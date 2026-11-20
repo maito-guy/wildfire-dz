@@ -1,6 +1,6 @@
 // App header (DESIGN.md §8): brand, mode switch, status chips, scoreboard and settings.
 // Data age is always visible; it turns into a fire banner past 3 h (§1.3). Server down is a banner too.
-import { ArrowsClockwise, Broadcast, ChartBar, Clock, Cpu, DeviceMobile, GearSix, Warning, Wind } from "@phosphor-icons/react";
+import { Broadcast, ChartBar, Clock, DeviceMobile, GearSix, Warning, Wind } from "@phosphor-icons/react";
 import type { ReactNode } from "react";
 import type { Health, PredictResponse } from "../api/client";
 import { brand } from "../config/brand";
@@ -60,7 +60,6 @@ export function Header({ mode, onMode, prediction: p, health, onScoreboard, onSe
         <div className="flex items-center gap-2.5">
           <img src={`${import.meta.env.BASE_URL}logo.png`} alt="" width={20} height={28} className="h-7 w-auto" />
           <span className="font-display text-[21px] font-extrabold tracking-[-0.03em]">{brand.name}</span>
-          <span className="status-word rounded-[5px] bg-ink px-1.5 py-0.5 text-white">Ops</span>
         </div>
         <div className="h-7 w-px bg-border" aria-hidden="true" />
         <ToggleGroup
@@ -100,16 +99,6 @@ export function Header({ mode, onMode, prediction: p, health, onScoreboard, onSe
           ) : (
             <Chip dot={h ? "ok" : undefined}>{h ? "Connected" : "Connecting…"}</Chip>
           )}
-          {p && (
-            <Chip
-              icon={<Cpu aria-hidden="true" />}
-              title={p.fallback_reason ? `Fallback: ${p.fallback_reason}` : undefined}
-              tone={p.fallback_reason ? "fire" : undefined}
-            >
-              Model {p.model}
-              {p.fallback_reason ? " · fallback" : " · auto"}
-            </Chip>
-          )}
           <Chip icon={<Clock aria-hidden="true" />} tone={p?.data_stale ? "fire" : undefined}>
             {ageText(p?.data_age_min)}
           </Chip>
@@ -121,9 +110,6 @@ export function Header({ mode, onMode, prediction: p, health, onScoreboard, onSe
           <Chip icon={<DeviceMobile aria-hidden="true" />} tone={phones === 0 ? "fire" : undefined}>
             {phones == null ? "— receivers" : plural(phones, "receiver", "receivers")}
           </Chip>
-          {h != null && h.pending_alerts > 0 && (
-            <Chip icon={<ArrowsClockwise aria-hidden="true" />}>{plural(h.pending_alerts, "pending", "pending")}</Chip>
-          )}
           <Button variant="ghost" size="sm" onClick={onScoreboard}>
             <ChartBar weight="bold" aria-hidden="true" />
             Scoreboard

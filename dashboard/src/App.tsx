@@ -14,7 +14,7 @@ import { Controls } from "./components/Controls";
 import type { Mode } from "./components/Header";
 import { Header } from "./components/Header";
 import type { LayerKey, LayerVisibility, MapView } from "./components/map/FireMap";
-import { DemoHint, LayersCard, WeatherCard } from "./components/map/MapOverlays";
+import { LayersCard } from "./components/map/MapOverlays";
 import { RiskPanel } from "./components/RiskPanel";
 import { Scoreboard } from "./components/Scoreboard";
 import { Settings } from "./components/Settings";
@@ -41,7 +41,7 @@ const DEFAULT_LAYERS: LayerVisibility = {
   alertAreas: true,
   nextPass: true,
   detections: true,
-  history: true,
+  history: false,
   risk: false,
 };
 
@@ -296,7 +296,6 @@ export default function App() {
       ? `Started ${fmtClock(demoStartedAt)} by map click · weather: ${windSourceWord(prediction.wind_source)} · ` +
         `model ${prediction.model}${prediction.embers_applied ? " · embers rule on" : ""} · click again to move it`
       : "";
-  const burningAt = prediction ? fmtClock(mode === "replay" && replay ? replay.passes[pass].t : prediction.time) : null;
   const setLayer = (k: LayerKey, v: boolean) => setLayers((l) => ({ ...l, [k]: v }));
   const pending = healthQ.data?.pending_alerts ?? 0;
   const focus = (lat: number, lon: number, zoom: number) =>
@@ -394,17 +393,7 @@ export default function App() {
               demo={appMode === "demo"}
               onMapClick={onMapClick}
             >
-              <LayersCard
-                layers={layers}
-                onChange={setLayer}
-                burningAt={burningAt}
-                replay={mode === "replay" && replay != null}
-                detections={fireData.detections.data}
-                history={fireData.history.data}
-                risk={riskQ.data}
-              />
-              <WeatherCard prediction={prediction} />
-              <DemoHint demo={appMode === "demo"} />
+              <LayersCard layers={layers} onChange={setLayer} />
             </FireMap>
           </Suspense>
         </div>

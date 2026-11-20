@@ -58,8 +58,8 @@ interface Props {
 maplibregl.setWorkerUrl(workerUrl);
 
 const HOME: [number, number] = [4.1, 36.6]; // lon, lat
-// Light, low-saturation basemap so red and orange stay the loudest things on screen.
-const BASEMAP = "https://tiles.openfreemap.org/styles/positron";
+// Full-colour basemap (forests, relief, roads) so the operator reads the terrain the fire is in.
+const BASEMAP = "https://tiles.openfreemap.org/styles/liberty";
 const STYLE_TIMEOUT_MS = 4000;
 // Offline (a hall with no internet): plain land, the fire layers still draw.
 const OFFLINE_STYLE: StyleSpecification = {
@@ -96,11 +96,6 @@ const LAYER_IDS: Record<Exclude<LayerKey, "villages">, string[]> = {
 const PICK_PX = 8;
 
 function addLayers(map: maplibregl.Map) {
-  // Quiet the basemap: our land and sea, so the fire colours stay the loudest.
-  for (const l of map.getStyle().layers ?? []) {
-    if (l.type === "background") map.setPaintProperty(l.id, "background-color", mapColors.land);
-    if (l.type === "fill" && /water|ocean|sea/i.test(l.id)) map.setPaintProperty(l.id, "fill-color", mapColors.sea);
-  }
   const src = (id: string) => map.addSource(id, { type: "geojson", data: geo.EMPTY });
   ["history", "risk", "zones", "burning", "next-pass", "alert-areas", "detections"].forEach(src);
 
@@ -108,7 +103,7 @@ function addLayers(map: maplibregl.Map) {
     id: "history",
     type: "fill",
     source: "history",
-    paint: { "fill-color": ["get", "color"], "fill-opacity": 0.55 },
+    paint: { "fill-color": ["get", "color"], "fill-opacity": 0.7 },
   });
   map.addLayer({
     id: "risk",
@@ -126,7 +121,7 @@ function addLayers(map: maplibregl.Map) {
         RISK_COLOR.moderate,
         RISK_COLOR.low,
       ],
-      "fill-opacity": 0.4,
+      "fill-opacity": 0.55,
     },
   });
   map.addLayer({
@@ -141,7 +136,7 @@ function addLayers(map: maplibregl.Map) {
     type: "line",
     source: "zones",
     filter: ["==", ["get", "horizon"], 120],
-    paint: { "line-color": mapColors.zone2hLine, "line-width": 2, "line-dasharray": [4, 3] },
+    paint: { "line-color": mapColors.zone2hLine, "line-width": 2.5, "line-dasharray": [4, 3] },
   });
   map.addLayer({
     id: "zone1h-fill",
@@ -155,7 +150,7 @@ function addLayers(map: maplibregl.Map) {
     type: "line",
     source: "zones",
     filter: ["==", ["get", "horizon"], 60],
-    paint: { "line-color": mapColors.zone1hLine, "line-width": 2.5 },
+    paint: { "line-color": mapColors.zone1hLine, "line-width": 3 },
   });
   map.addLayer({
     id: "burning",
