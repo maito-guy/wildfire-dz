@@ -1,0 +1,19 @@
+# Keep the build context small and free of secrets, data and model outputs.
+.git
+.venv
+**/node_modules
+**/dist
+.turbo
+**/__pycache__
+.pytest_cache
+.ruff_cache
+.env
+data/out
+data/raw
+data/cache
+model/artifacts/*
+.claude
+*.parquet
+*.tif
+pitch
+docs

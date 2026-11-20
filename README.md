@@ -35,6 +35,33 @@ npx turbo dev         # API on http://localhost:8000 + dashboard on http://local
 Without data files, the API runs on **stubs**: fake villages (`stub:` ids) and one synthetic fire, all flagged `stub`.
 Frontend work can start right away. Real data drops in with no code change (see `data/README.md`).
 
+## Run with Docker
+
+Needs only Docker with Compose v2 (no Python or Node on the machine). One image holds the API, the built dashboard and
+the phone page; `docker-compose.yml` runs it as one `api` service on port 8000 (`PORT=8040 make docker-up` to change it).
+
+```bash
+make docker-up        # docker compose up -d --build → http://localhost:8000/dashboard/ and /alert/
+make docker-logs      # follow the API logs
+make docker-down      # stop and remove the container
+```
+
+- `.env` is read at runtime (`env_file`, optional), never copied into the image.
+- `data/out/` and `model/artifacts/` are mounted **read-only** from the repo folder. Without them the API runs on stubs,
+  as in the 5-minute setup. After dropping new files in, `docker compose restart` picks them up: no rebuild.
+- Rebuild (`make docker-up`) only after a code change. `GET /health` shows `places: real` once `data/out/places.parquet` is there.
+- The container runs as a non-root user (uid 10001) and has a health check on `/health` (`docker compose ps`).
+
+### Demo day (Docker)
+
+1. `cp .env.example .env`, then set `OPERATOR_TOKEN` in `.env` (write endpoints need it; enter the same token in the
+   dashboard's Settings panel).
+2. Put the data files in `data/out/` (`*.parquet`) and the exported model in `model/artifacts/`.
+3. `make docker-up`, then `docker compose ps` until the service is `healthy`.
+4. Projector/operator: open `http://<laptop-ip>:8000/dashboard/` (`make lan-ip` prints the laptop address).
+5. Phones (same Wi-Fi): open `http://<laptop-ip>:8000/alert/` and tap **arm**.
+6. New data or model files during the day: drop them in, then `docker compose restart` (no rebuild).
+
 ## Layout
 
 | Folder | What | Owner |
