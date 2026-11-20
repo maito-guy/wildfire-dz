@@ -13,10 +13,10 @@ import logging
 import os
 
 from fastapi import Body, Depends, FastAPI, Header, HTTPException, Request
-from fastapi.responses import RedirectResponse, StreamingResponse
+from fastapi.responses import RedirectResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
-from api import impact, predictor, replay, weather
+from api import cap, impact, predictor, replay, weather
 from api.alerts import LANGS, Broker, store
 from api.schemas import (
     Alert,
@@ -188,6 +188,17 @@ async def reject(alert_id: str, body: AlertReject):
 @app.post("/alerts/{alert_id}/cancel", response_model=Alert, dependencies=[Depends(require_operator)])
 async def cancel(alert_id: str):
     return _act(store.cancel, alert_id)
+
+
+@app.get("/alerts/{alert_id}/cap.xml")
+async def cap_xml(alert_id: str):
+    """CAP 1.2 message: Alert for a sent alert, Cancel for a cancelled one. Public once sent."""
+    a = store.alerts.get(alert_id)
+    if a is None:
+        raise HTTPException(404, f"unknown alert {alert_id}")
+    if a["status"] not in ("sent", "cancelled"):
+        raise HTTPException(409, f"alert {alert_id} is {a['status']}, it was never published")
+    return Response(cap.build_cap(a, load_config()), media_type="application/xml")
 
 
 @app.get("/alerts/stream")

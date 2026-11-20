@@ -25,6 +25,7 @@ import json
 import logging
 from functools import lru_cache
 
+from api import cap
 from core.config import load_config, repo_path
 
 log = logging.getLogger(__name__)
@@ -78,6 +79,14 @@ def render(level: str, v: dict) -> dict[str, str]:
         if tpl:  # untranslated languages are simply left out; the phone shows what exists
             out[lang] = tpl.format(**fields)
     return out
+
+
+def _cap_handoff(a: dict) -> None:
+    """Simulated cell-broadcast hand-off of the CAP message. A CAP failure never blocks the phones."""
+    try:
+        cap.handoff(a, cap.build_cap(a, load_config()))
+    except Exception:
+        log.exception("CAP message for alert %s could not be built", a["id"])
 
 
 def _now() -> dt.datetime:
@@ -136,6 +145,7 @@ class AlertStore:
             self.sent_level[key] = a["level"]
         self.broker.publish("alert", a)
         self.events.publish("alert_sent", a)
+        _cap_handoff(a)
 
     def send(self, fire_id: str, v: dict, level: str, source: str, scenario_time, data_age_min: int) -> dict:
         """Send at once (manual operator alert). Goes straight to the phones."""
@@ -242,6 +252,7 @@ class AlertStore:
         log.info("alert %s cancelled", a["id"])
         self.broker.publish("cancel", a)
         self.events.publish("alert_cancelled", a)
+        _cap_handoff(a)
         return a
 
     def _pending_or_raise(self, alert_id: str) -> dict:
