@@ -1,4 +1,5 @@
 import type { LatLngTuple, LeafletMouseEvent } from "leaflet";
+import type { ReactNode } from "react";
 import { useEffect } from "react";
 import { CircleMarker, GeoJSON, MapContainer, TileLayer, Tooltip, useMap, useMapEvents } from "react-leaflet";
 import type { LatLon, PredictResponse, Village } from "../api/client";
@@ -22,6 +23,8 @@ interface Props {
   view: MapView | null;
   startMode: boolean;
   onMapClick: (p: LatLon) => void;
+  /** Extra layers drawn under the fire (e.g. today's risk). */
+  children?: ReactNode;
 }
 
 function ViewController({ view }: { view: MapView | null }) {
@@ -37,7 +40,7 @@ function ClickHandler({ onClick }: { onClick: (p: LatLon) => void }) {
   return null;
 }
 
-export function FireMap({ prediction, burning, truth, villages, view, startMode, onMapClick }: Props) {
+export function FireMap({ prediction, burning, truth, villages, view, startMode, onMapClick, children }: Props) {
   const zones = prediction ? zoneFeatures(prediction) : [];
   return (
     <div className={`map${startMode ? " start-mode" : ""}`}>
@@ -50,6 +53,7 @@ export function FireMap({ prediction, burning, truth, villages, view, startMode,
         />
         <ViewController view={view} />
         <ClickHandler onClick={onMapClick} />
+        {children}
 
         {zones.map((f) => {
           const h = f.properties.horizon_min;

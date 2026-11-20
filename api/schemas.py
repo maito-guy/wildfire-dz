@@ -118,3 +118,76 @@ class AlertApprove(BaseModel):
 
 class AlertReject(BaseModel):
     reason: str = Field(min_length=1)
+
+
+# ---- today's risk layer (#28, docs/contracts.md GET /risk) -------------------------------------
+RiskLevel = Literal["low", "moderate", "high", "very_high"]
+
+
+class RiskCell(BaseModel):
+    lat: float                                 # centre of a display cell (risk.display_cell_deg)
+    lon: float
+    score: float                               # 0-1, highest score among the merged 375 m cells
+    level: RiskLevel
+
+
+class RiskPlace(BaseModel):
+    id: str
+    name: str
+    lat: float
+    lon: float
+    distance_km: float                         # to the very-high cell
+    score: float
+    level: RiskLevel
+    top_factors: list[str]                     # e.g. ["wind", "dryness", "past fires"]
+    alert_id: str                              # its preventive flag in the approval queue
+    alert_status: AlertStatus
+
+
+class RiskResponse(BaseModel):
+    date: str                                  # YYYY-MM-DD, the day the risk is for
+    stub: bool                                 # true = fake cells, risk_today.parquet is missing
+    generated_at: datetime | None              # when the risk file was written (null for the stub)
+    cell_deg: float                            # display cell size in degrees (square in lat/lon)
+    flag_level: RiskLevel                      # places near cells at this level are flagged
+    cells: list[RiskCell]                      # levels >= risk.min_level_shown, highest score first
+    places: list[RiskPlace]                    # flagged places, highest score first
+
+
+# --- Fire map (#29): GET /detections, GET /history ---------------------------------------------------
+class Detection(BaseModel):
+    lat: float
+    lon: float
+    t: datetime                                # acquisition time (UTC)
+    satellite: str | None = None               # SNPP | NOAA20 | NOAA21
+    frp: float | None = None                   # fire radiative power, MW
+    confidence: str | None = None              # n (nominal) | h (high); low-confidence rows are dropped upstream
+    daynight: str | None = None                # D | N
+
+
+class DetectionsResponse(BaseModel):
+    stub: bool                                 # true = synthetic detections, not real data
+    newest: datetime | None                    # newest detection in the data; the "last 24 h / 7 days" clock
+    since: datetime
+    until: datetime
+    count: int
+    truncated: bool                            # more matched than fire_map.max_points (the newest are kept)
+    detections: list[Detection]                # newest first
+
+
+class HistoryCell(BaseModel):
+    lat: float                                 # cell centre
+    lon: float
+    count: int                                 # detections in the cell, all years
+    years: int | None = None                   # distinct years with a detection
+    last_year: int | None = None
+
+
+class HistoryResponse(BaseModel):
+    stub: bool
+    source: Literal["grid", "detections", "stub"]   # history_grid.parquet, aggregated detections, or stub
+    cell_deg: float                            # cell size in degrees (lat and lon)
+    first_year: int | None
+    last_year: int | None
+    max_count: int
+    cells: list[HistoryCell]

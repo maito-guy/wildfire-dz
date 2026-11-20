@@ -14,6 +14,19 @@ and a message in the team chat naming who is affected. Everything is WGS84 lat/l
   `dashboards_connected` and `pending_alerts`. Affected: dashboard (queue), phone page (unchanged shape), CAP (#26), risk flags (#28).
 - **v0.3 (#26, CAP message).** New `GET /alerts/{id}/cap.xml` (CAP 1.2, Alert or Cancel) and the simulated
   cell-broadcast hand-off log line. New `config.yaml` section `cap:`. Alert object unchanged. Affected: dashboard (link to the XML).
+- **#21 (scoreboard view).** `GET /scoreboard` without `scoreboard.json` now serves a stub of the full shape,
+  flagged `stub: true`, every metric `null` (was `{"status", "weather_note", "fires": []}`). New optional
+  `replay_counter` (the "warned X before vs old method" counter). Additive; affected: dashboard, `model.evaluate` (#19).
+- **v0.4 (#28, risk layer).** New file `model/artifacts/risk_today.parquet` (written by `model.risk`, #27; read by
+  `api/risk.py`) and new `GET /risk`. Until the file exists, `/risk` serves deterministic stub cells (`stub: true`).
+  Very-high-risk places become pending `preventive` flags (`source: ai_risk`, `fire_id: risk_<date>`), one per place
+  and day. New `config.yaml` keys `paths.risk_today` and section `risk:`. Alert object unchanged.
+  Affected: AI (#27 writes the file), dashboard (risk layer, queue).
+
+- **v0.5 (#29, fire map).** New files `data/out/detections.parquet` and `data/out/history_grid.parquet` (Data writes
+  them; read by `api/detections.py`) and new `GET /detections` and `GET /history`. Until the files exist both serve
+  deterministic stub data (`stub: true`). New `config.yaml` keys `paths.detections`, `paths.history_grid` and section
+  `fire_map:`. Affected: Data (writes the files), dashboard (fire map layers).
 
 ---
 
@@ -50,6 +63,31 @@ A fire is held out if any of its rows falls inside the window **and** bbox (`con
 ### `data/out/replay_passes.parquet` → `api/replay.py`
 One row per burning cell per pass: `holdout (str: kabylie_2021 | jijel_guelma_2026), t (UTC timestamp), lat, lon` (+ optional `satellite, frp`).
 
+### `model/artifacts/risk_today.parquet` → `api/risk.py` *(added v0.4, #28)*
+Written by `python -m model.risk score` (#27). Path: `config.yaml → paths.risk_today`. One row per 375 m cell and day:
+
+| Column | Type | Meaning |
+|---|---|---|
+| `date` | str `YYYY-MM-DD` (or date/timestamp) | the day the risk is for. The API serves only the **latest** date in the file |
+| `lat`, `lon` | float | cell centre (WGS84) |
+| `score` | float 0–1 | probability-like risk score |
+| `level` | str | `low \| moderate \| high \| very_high`, set by the model (its thresholds) |
+| `top_factors` | list[str], or one str separated by `;` | most important factors first, plain words (e.g. `wind`, `dryness`, `past fires`) |
+
+Extra columns are ignored. Rows may cover only part of the country (missing cells are simply not drawn).
+A file without one of these columns makes `GET /risk` answer 500 naming the missing columns.
+
+### `data/out/detections.parquet` → `api/detections.py` *(added v0.5, #29)*
+One row per satellite detection (VIIRS 375 m): `lat, lon (float), t (UTC timestamp)` required; optional `satellite,
+frp (MW), confidence (n|h), daynight`, `country` (rows other than `DZA` are dropped) and `flare` (bool, dropped when true).
+FIRMS names `latitude`, `longitude`, `sat`, `conf` are accepted. The API keeps rows north of `scope.lat_min` and removes
+gas flares (a 750 m block lit on ≥ `fire_map.flare_min_days` days across ≥ `fire_map.flare_min_years` years).
+
+### `data/out/history_grid.parquet` → `api/detections.py` *(added v0.5, #29)*
+One row per grid cell: `lat, lon (cell centre), count (int)` required; optional `years` (years with fire), `last_year`,
+`first_year`. Build it from the detections with `python -m api.detections build-history`; without it the API
+aggregates `detections.parquet` itself (`fire_map.history_cell_deg`), and without either it serves a stub.
+
 ### `model/artifacts/` → API (git-ignored; share via Drive)
 | File | Writer | Content |
 |---|---|---|
@@ -57,6 +95,7 @@ One row per burning cell per pass: `holdout (str: kabylie_2021 | jijel_guelma_20
 | `thresholds.json` | `model.evaluate` | tuned `rate_m_per_min` for A and B, `prob` threshold per C |
 | `scoreboard.json` | `model.evaluate` | per holdout × model metrics (shape in §2, `GET /scoreboard`) |
 | `api_manifest.json` | `model.export` | what the API loads: rates for A/B and the shipped C (or `null`) |
+| `risk_today.parquet` | `model.risk` | today's risk per cell (above, v0.4) |
 
 ---
 
@@ -309,7 +348,9 @@ That is the stub answer. Once `replay_passes.parquet` exists, there is one entry
 The dashboard posts each pass to `/predict` (`time = observed_at = t`) and draws the **next** pass as "what really burned".
 
 ### `GET /scoreboard` *(added v0.1)*
-Serves `model/artifacts/scoreboard.json`. Before the first evaluation it returns `{"status": "not measured yet", ...}`.
+Serves `model/artifacts/scoreboard.json` as is. Before the first evaluation it serves a stub of the same shape
+with `"stub": true`, `"status": "not measured yet"`, one entry per `config.yaml → holdouts` and every metric `null`
+(`api/scoreboard.py`). The dashboard shows `null` or a missing key as "not measured".
 ```json
 {
   "generated_at": "2026-11-20T21:00:00+00:00",
@@ -326,10 +367,69 @@ Serves `model/artifacts/scoreboard.json`. Before the first evaluation it returns
        "C_dza": {"...": "same keys"}
      }}
   ],
+  "replay_counter": {"holdout": "kabylie_2021", "village": null, "model": null, "lead_min": null,
+                     "old_method": null, "old_method_lead_min": null, "status": "not measured yet"},
   "ship_c": {"rule": "C ships only if it beats B on missed villages and lead time", "decision": "not measured yet"}
 }
 ```
 (All values are `null` here on purpose. Real numbers come only from `model.evaluate`.)
+- `replay_counter` *(optional, #21)*: the counter on the replay fire, read as "`village` warned `lead_min` before
+  the fire arrived (model `model`); `old_method`: `old_method_lead_min`". `old_method` is a short label for the
+  comparison (for example how the village is warned today); minutes are integers. If the key is missing or any of
+  `village`, `lead_min`, `old_method_lead_min` is `null`, the dashboard shows "not measured".
+- Model keys are free-form (`A`, `B`, `C_<tag>`); the dashboard shows whichever are present. Extra keys
+  (`n_rows`, `n_burned_cells`) are ignored.
+
+### `GET /risk` *(added v0.4, #28)*
+Today's risk layer, simplified for the map, and the very-high-risk places. No token.
+```json
+{
+  "date": "2026-11-20",
+  "stub": false,
+  "generated_at": "2026-11-20T05:10:00Z",
+  "cell_deg": 0.05,
+  "flag_level": "very_high",
+  "cells": [{"lat": 36.625, "lon": 4.125, "score": 0.91, "level": "very_high"}],
+  "places": [
+    {"id": "osm:123456", "name": "Village X", "lat": 36.62, "lon": 4.11, "distance_km": 1.3,
+     "score": 0.91, "level": "very_high", "top_factors": ["wind", "dryness", "past fires"],
+     "alert_id": "al_0007", "alert_status": "pending"}
+  ]
+}
+```
+- `cells`: the file's cells merged onto a `cell_deg` lattice (`config.yaml → risk.display_cell_deg`), keeping the
+  **highest** score and its level; `lat`/`lon` is the centre of a `cell_deg` × `cell_deg` square. Only levels at or above
+  `risk.min_level_shown` (`moderate`) are sent. Highest score first.
+- `places`: places (`places.parquet`, or one stub place per cell) within `risk.place_radius_km` of a cell at
+  `flag_level`, highest score first, at least `risk.min_flag_spacing_km` apart, at most `risk.max_flags`.
+- **Preventive flags:** each listed place gets one pending Alert (`level: "preventive"`, `source: "ai_risk"`,
+  `fire_id: "risk_<date>"`, `minutes_left: null`, `distance_km` = to the very-high cell, empty `fire_direction` and
+  `leave_toward`, the `preventive` text) through the normal approval
+  queue (event `flag` on `/events`). A place already flagged that day, whatever its status (pending, sent, rejected,
+  cancelled), is not flagged again; `alert_id`/`alert_status` point at that alert. Flags are created when `/risk` is
+  read (the dashboard reads it on load), so after `POST /reset` they come back on the next read.
+- `stub: true` (and `generated_at: null`) = `risk_today.parquet` is missing: deterministic **fake** cells over northern
+  Algeria and places named `STUB place …`. Not real data.
+
+### `GET /detections?since=&until=` *(added v0.5, #29)*
+Satellite detections for the fire map, newest first. No token. Without `since`: the `fire_map.default_hours` (168 h)
+before the newest detection. ISO times; a bad time → 422.
+```json
+{"stub": false, "newest": "2026-08-30T10:40:00Z", "since": "2026-08-23T10:40:00Z", "until": "2026-08-30T10:40:00Z",
+ "count": 365, "truncated": false,
+ "detections": [{"lat": 36.745, "lon": 5.988, "t": "2026-08-30T10:40:00Z", "satellite": "SNPP", "frp": 25.2,
+                 "confidence": "n", "daynight": "D"}]}
+```
+At most `fire_map.max_points` rows; `truncated: true` when more matched. The dashboard splits them into the last 24 h
+before `newest` and 1–7 days ago.
+
+### `GET /history` *(added v0.5, #29)*
+Fire history grid, all years. No token.
+```json
+{"stub": false, "source": "grid", "cell_deg": 0.05, "first_year": 2012, "last_year": 2026, "max_count": 121,
+ "cells": [{"lat": 36.625, "lon": 4.125, "count": 12, "years": 4, "last_year": 2021}]}
+```
+`source`: `grid` (history_grid.parquet), `detections` (aggregated by the API) or `stub` (fake, with `stub: true`).
 
 ### `GET /health` *(added v0.1)*
 ```json

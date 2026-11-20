@@ -8,7 +8,6 @@ import asyncio
 import datetime as dt
 import hmac
 import itertools
-import json
 import logging
 import os
 
@@ -16,7 +15,8 @@ from fastapi import Body, Depends, FastAPI, Header, HTTPException, Request
 from fastapi.responses import RedirectResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
-from api import cap, impact, predictor, replay, weather
+from api import cap, detections, impact, predictor, replay, weather
+from api import scoreboard as scoreboard_file
 from api.alerts import LANGS, Broker, store
 from api.schemas import (
     Alert,
@@ -24,11 +24,13 @@ from api.schemas import (
     AlertCreate,
     AlertReject,
     AlertStatus,
+    DetectionsResponse,
+    HistoryResponse,
     PredictRequest,
     PredictResponse,
     VillagesResponse,
 )
-from core.config import ROOT, load_config, repo_path
+from core.config import ROOT, load_config
 
 app = FastAPI(title="Wildfire early warning — northern Algeria", version="0.1.0")
 FIRES: dict[str, dict] = {}          # fire_id -> latest prediction state (in memory, demo only)
@@ -228,13 +230,26 @@ async def replay_passes(fire_id: str):
     return r
 
 
+# --- Fire map (#29): satellite detections and fire history (api/detections.py) ---------------------------
+@app.get("/detections", response_model=DetectionsResponse)
+def get_detections(since: dt.datetime | None = None, until: dt.datetime | None = None):
+    """Detections since..until (default: the 7 days before the newest), newest first. Stub until data exists."""
+    try:
+        return detections.detections(_utc(since) if since else None, _utc(until) if until else None)
+    except ValueError as e:
+        raise HTTPException(422, str(e)) from e
+
+
+@app.get("/history", response_model=HistoryResponse)
+def get_history():
+    """Fire history grid (all years). Stub until history_grid.parquet or detections.parquet exists."""
+    return detections.history()
+
+
 @app.get("/scoreboard")
 async def scoreboard():
-    p = repo_path(load_config()["paths"]["artifacts"]) / "scoreboard.json"
-    if p.exists():
-        return json.loads(p.read_text())
-    return {"status": "not measured yet", "weather_note": "Weather is ERA5 reanalysis (a perfect forecast).",
-            "fires": []}
+    # model/artifacts/scoreboard.json, or a stub of the same shape flagged stub=true (api/scoreboard.py)
+    return scoreboard_file.load()
 
 
 @app.post("/reset", dependencies=[Depends(require_operator)])
@@ -243,6 +258,20 @@ async def reset():
     FIRES.clear()
     store.reset()
     return {"ok": True}
+
+
+# ---- today's risk layer (#28) ------------------------------------------------------------------
+from api import risk  # noqa: E402
+from api.schemas import RiskResponse  # noqa: E402
+
+
+@app.get("/risk", response_model=RiskResponse)
+async def risk_today():
+    """Today's risk cells (simplified) and very-high-risk places; creates their preventive flags once a day."""
+    try:
+        return risk.today()
+    except ValueError as e:  # malformed risk file: say so instead of a bare 500
+        raise HTTPException(500, str(e)) from e
 
 
 @app.get("/")
