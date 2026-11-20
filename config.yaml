@@ -92,3 +92,10 @@ model:
 api:
   default_model: auto                      # auto = C if exported and features available, else B
   alert_area_radius_km: 5                  # simulated cell-broadcast area around a village
+
+forecast:                                  # Open-Meteo wind for /predict when the request carries no wind (api/weather.py)
+  forecast_url: https://api.open-meteo.com/v1/forecast
+  archive_url: https://archive-api.open-meteo.com/v1/archive   # ERA5, for times older than past_days
+  timeout_s: 3
+  cache_min: 15
+  past_days: 2                             # times newer than now - past_days use the forecast API
