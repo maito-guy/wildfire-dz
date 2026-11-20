@@ -8,7 +8,8 @@
   "headline": {
     "get_ready": {"en": "Emergency alert: wildfire", "fr": "", "ar": "", "ary": "", "kab": ""},
     "leave_now": {"en": "Extreme alert: wildfire", "fr": "", "ar": "", "ary": "", "kab": ""},
-    "update": {"en": "Wildfire update", "fr": "", "ar": "", "ary": "", "kab": ""}
+    "update": {"en": "Wildfire update", "fr": "", "ar": "", "ary": "", "kab": ""},
+    "preventive": {"en": "High fire risk today", "fr": "", "ar": "", "ary": "", "kab": ""}
   },
   "templates": {
     "get_ready": {
@@ -21,6 +22,10 @@
     },
     "update": {
       "en": "{village}: the fire is no longer moving toward you. Stay alert; we will tell you if this changes.",
+      "fr": "", "ar": "", "ary": "", "kab": ""
+    },
+    "preventive": {
+      "en": "High fire risk today around {village}. Do not burn anything outdoors. Report smoke to Civil Protection: {phone}.",
       "fr": "", "ar": "", "ary": "", "kab": ""
     }
   }
