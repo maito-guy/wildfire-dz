@@ -2,17 +2,20 @@
 import asyncio
 import json
 
+import pytest
 from fastapi.testclient import TestClient
 
 from api.alerts import Broker
 from api.main import app
 
-client = TestClient(app)
+client = TestClient(app, headers={"X-Operator-Token": "test-token"})
 FIRE = [{"lat": 36.65, "lon": 4.10}, {"lat": 36.652, "lon": 4.104}]
 
 
-def setup_function():
-    client.post("/reset")
+@pytest.fixture(autouse=True)
+def _reset(monkeypatch):
+    monkeypatch.setenv("OPERATOR_TOKEN", "test-token")
+    assert client.post("/reset").status_code == 200
 
 
 def test_health_and_static():
@@ -37,10 +40,14 @@ def test_predict_villages_alerts_flow():
     assert first["status"] in {"safe", "get_ready", "leave_now"}
     assert set(first) >= {"id", "name", "lat", "lon", "minutes_left", "status", "leave_toward"}
 
-    alerts = client.get("/alerts").json()
-    assert alerts, "auto alerts expected for villages under 120 min"
-    assert "en" in alerts[0]["texts"]
-    c = client.post(f"/alerts/{alerts[0]['id']}/cancel").json()
+    flags = client.get("/alerts").json()
+    assert flags, "pending flags expected for villages under 120 min"
+    assert all(a["status"] == "pending" and a["source"] == "ai_spread" for a in flags)
+    assert "en" in flags[0]["texts"]
+    assert client.get("/health").json()["pending_alerts"] == len(flags)
+    s = client.post(f"/alerts/{flags[0]['id']}/approve").json()
+    assert s["status"] == "sent" and s["approved_at"]
+    c = client.post(f"/alerts/{flags[0]['id']}/cancel").json()
     assert c["status"] == "cancelled"
     m = client.post("/alerts", json={"village_id": first["id"], "level": "leave_now"})
     assert m.status_code == 200 and m.json()["source"] == "manual"

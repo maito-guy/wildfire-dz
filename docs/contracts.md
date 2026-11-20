@@ -7,6 +7,11 @@ and a message in the team chat naming who is affected. Everything is WGS84 lat/l
 - **v0.1 (Fri 20 Nov, 08:45).** First full write-up of §7. Additions needed by the screens, all read-only or demo-only:
   `GET /health`, `GET /alerts`, `GET /replay`, `GET /replay/{fire_id}`, `GET /scoreboard`, `POST /reset`.
   Nothing in §7 changed.
+- **v0.2 (#24, approval queue).** Nothing reaches the phones without an operator click. Alert gains `status`
+  `pending | rejected`, level `preventive`, `source` `ai_spread | ai_risk | manual` (replaces `auto`), and
+  `approved_at`, `rejected_at`, `reject_reason`, `edited`. New: `POST /alerts/{id}/approve`, `POST /alerts/{id}/reject`,
+  `GET /events`, `GET /alerts?status=`. Write endpoints take `X-Operator-Token`. `/health` adds
+  `dashboards_connected` and `pending_alerts`. Affected: dashboard (queue), phone page (unchanged shape), CAP (#26), risk flags (#28).
 
 ---
 
@@ -68,7 +73,7 @@ Status is **sticky**: a warned village never goes back to `safe` while the fire 
 
 ### `POST /predict`
 Takes the current fire mask and a time. Returns the 1 h / 2 h zones, per-cell arrival times, the model used and the data age.
-It also stores the fire and runs the auto-alert rule. "Start a fire here" = this call with one point and no `fire_id`.
+It also stores the fire and runs the auto rule, which creates **pending** flags (nothing is sent). "Start a fire here" = this call with one point and no `fire_id`.
 
 Request:
 ```json
@@ -145,7 +150,15 @@ Each place within 15 km of the fire, most urgent first. If `fire_id` is omitted,
 ```
 `minutes_left: null` = not reached within the model's horizon. `leave_toward` = away from the nearest burning cell (no road routing).
 
-### Alert object (used by every alert endpoint and the stream)
+### Operator token (write endpoints)
+`POST /alerts`, `POST /alerts/{id}/approve`, `POST /alerts/{id}/reject`, `POST /alerts/{id}/cancel` and `POST /reset`
+take a header `X-Operator-Token`, compared with the env var `OPERATOR_TOKEN` (`.env`).
+- `OPERATOR_TOKEN` set → a missing or wrong header gets **401**. The demo sets it.
+- `OPERATOR_TOKEN` unset or empty → dev mode: allowed, and the API logs one warning.
+
+`POST /predict` and every `GET` stay open.
+
+### Alert object (used by every alert endpoint and both streams)
 ```json
 {
   "id": "al_0001",
@@ -153,11 +166,15 @@ Each place within 15 km of the fire, most urgent first. If `fire_id` is omitted,
   "village_id": "osm:123456",
   "village_name": "Village X",
   "level": "leave_now",
-  "source": "auto",
+  "source": "ai_spread",
   "status": "sent",
   "created_at": "2026-11-20T07:37:33Z",
   "scenario_time": "2021-08-09T12:00:00Z",
+  "approved_at": "2026-11-20T07:38:02Z",
+  "rejected_at": null,
+  "reject_reason": null,
   "cancelled_at": null,
+  "edited": false,
   "minutes_left": 31,
   "distance_km": 1.04,
   "fire_direction": "SW",
@@ -169,33 +186,63 @@ Each place within 15 km of the fire, most urgent first. If `fire_id` is omitted,
   }
 }
 ```
-`level`: `get_ready | leave_now | update`. `source`: `auto | manual`. `status`: `sent | cancelled`.
-`texts` keys: `ary` (Darija), `kab` (Kabyle), `ar`, `fr`, `en`. A language appears only once its checked text exists in `alert/texts.json`.
+- `level`: `get_ready | leave_now | update | preventive`.
+- `source`: `ai_spread` (the `/predict` rule), `ai_risk` (the daily risk job, preventive flags), `manual` (operator).
+- `status`: `pending → sent | rejected`, then `sent → cancelled`. Only `sent` and `cancelled` alerts ever reach the phones.
+- Times: `created_at` = flagged (or sent, for manual alerts), `approved_at` = sent, `rejected_at` + `reject_reason`, `cancelled_at`.
+  Every action is also written to the API log.
+- `edited`: the operator changed the texts when approving.
+- `texts` keys: `ary` (Darija), `kab` (Kabyle), `ar`, `fr`, `en`. A language appears only once its checked text exists in `alert/texts.json`.
 
-**Auto rule** (runs on every `/predict`): a village crossing into `get_ready`/`leave_now` gets an alert at that level. Escalation sends again, and the same level is never re-sent.
-If a warned village's computed status falls to `safe`, it gets one `update` alert.
+**Auto rule** (runs on every `/predict`, per fire and village). It only creates or updates **pending** flags:
+- A village crossing into level L (`get_ready`/`leave_now`) with no alert at level ≥ L sent and none pending → a pending flag (`source: "ai_spread"`, event `flag`).
+- A pending flag whose village changes level or minutes is updated in place: the level only goes up, texts are re-rendered (event `flag_updated`).
+- `get_ready` sent and the village escalates to `leave_now` → a new pending `leave_now` flag.
+- A village with a sent alert whose computed status falls to `safe` → one pending `update` flag.
+- A rejected flag at level L is not re-created for the same fire and village unless the level escalates.
+- Cancelling a sent alert does not re-arm the rule at that level.
+
+### `POST /alerts/{id}/approve` *(added v0.2)*
+Optional body (edits made by the operator before sending):
+```json
+{"texts": {"en": "Edited text."}, "radius_km": 8}
+```
+- `texts`: replaces those languages only (keys from `ary kab ar fr en`, non-empty) and sets `edited: true`.
+- `radius_km`: `0 < radius_km ≤ 50`, sets `area.radius_km`.
+
+→ 200 Alert with `status: "sent"`, `approved_at` set. It pushes `alert` to the phones and `alert_sent` to `/events`.
+404 unknown id, 409 if the alert is not pending, 422 bad body, 401 bad token.
+
+### `POST /alerts/{id}/reject` *(added v0.2)*
+```json
+{"reason": "smoke from a controlled burn"}
+```
+→ 200 Alert with `status: "rejected"`, `rejected_at` and `reject_reason` set. Event `alert_rejected` on `/events`; nothing goes to the phones.
+404 unknown id, 409 if not pending, 422 if `reason` is empty.
 
 ### `POST /alerts`: manual extra alert
 ```json
 {"village_id": "osm:123456", "fire_id": "fire_001", "level": "leave_now"}
 ```
-→ 200 Alert object (`source: "manual"`). 404 if the village is not within 15 km of an active fire.
+→ 200 Alert object, **sent at once** (`source: "manual"`, `status: "sent"`): the operator's click is the approval.
+404 if the village is not within 15 km of an active fire.
 
 ### `POST /alerts/{id}/cancel`
-No body → 200 Alert object with `status: "cancelled"`, `cancelled_at` set. It pushes a `cancel` event to the phones.
-It does not re-arm auto-send at that level for that village. 404 if the id is unknown.
+No body → 200 Alert object with `status: "cancelled"`, `cancelled_at` set. It pushes a `cancel` event to the phones and
+`alert_cancelled` to `/events`. It does not re-arm the auto rule at that level for that village.
+404 if the id is unknown, 409 if the alert is not `sent` (a pending flag is rejected, not cancelled).
 
-### `GET /alerts?fire_id=<id>` *(added v0.1)*
-→ `[Alert, ...]` in send order.
+### `GET /alerts?fire_id=<id>&status=<status>` *(added v0.1, `status` v0.2)*
+→ `[Alert, ...]` in creation order. Both filters are optional. `status` is one of `pending | sent | rejected | cancelled`.
 
-### `GET /alerts/stream?village_id=<id>`: push stream (SSE)
-`text/event-stream`. Events:
+### `GET /alerts/stream?village_id=<id>`: push stream for phones (SSE)
+`text/event-stream`. Only sent alerts and cancels: a pending or rejected flag never appears here. Events:
 ```
 event: hello
 data: {}
 
 event: alert
-data: {Alert object}
+data: {Alert object, status "sent"}
 
 event: cancel
 data: {Alert object, status "cancelled"}
@@ -203,6 +250,17 @@ data: {Alert object, status "cancelled"}
 : ping            (every 15 s keep-alive)
 ```
 `village_id` omitted = every alert (demo default, like phones in the whole area). Browsers reconnect automatically.
+
+### `GET /events`: push stream for the dashboard (SSE) *(added v0.2)*
+`text/event-stream`. First `event: hello` (`data: {}`), then `: ping` every 15 s. Every other event's `data` is the Alert object:
+
+| Event | When |
+|---|---|
+| `flag` | a new pending alert (AI flag) |
+| `flag_updated` | a pending alert changed (level, minutes, texts) |
+| `alert_sent` | approved, or a manual alert sent |
+| `alert_rejected` | rejected |
+| `alert_cancelled` | a sent alert cancelled |
 
 ### `GET /replay` *(added v0.1)*
 ```json
@@ -249,9 +307,12 @@ Serves `model/artifacts/scoreboard.json`. Before the first evaluation it returns
 
 ### `GET /health` *(added v0.1)*
 ```json
-{"ok": true, "fires": 1, "phones_connected": 4, "model_c_exported": false, "places": "real", "replay": "real"}
+{"ok": true, "fires": 1, "phones_connected": 4, "dashboards_connected": 1, "pending_alerts": 3,
+ "model_c_exported": false, "places": "real", "replay": "real"}
 ```
+`phones_connected` = clients on `/alerts/stream`, `dashboards_connected` = clients on `/events` (v0.2),
+`pending_alerts` = alerts waiting for the operator.
 `places`/`replay` = `stub` until the data files exist. Check `phones_connected` before each demo run.
 
 ### `POST /reset` *(added v0.1, demo only)*
-Clears fires and alerts between rehearsals → `{"ok": true}`.
+Clears fires and alerts between rehearsals → `{"ok": true}`. Needs `X-Operator-Token` (401 otherwise, when the token is set).
