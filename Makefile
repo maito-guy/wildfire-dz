@@ -4,7 +4,7 @@ export
 PY ?= .venv/bin/python
 PORT ?= 8000
 
-.PHONY: help setup api dashboard-dev dashboard-build test lint fmt check-columns train train-dza evaluate export model data lan-ip
+.PHONY: help setup dev api dashboard-dev dashboard-build test lint fmt check-columns train train-dza evaluate export model data lan-ip
 
 help:            ## list targets
 	@grep -E '^[a-z-]+:.*##' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-14s %s\n", $$1, $$2}'
@@ -16,14 +16,17 @@ setup:           ## create .venv (Python 3.11) and install everything
 	@test -f .env || cp .env.example .env
 	@echo "ok: now run 'make api'"
 
+dev:             ## API (:8000) + dashboard (:5173) together with hot reload (needs .venv and `npm ci`)
+	npx turbo dev
+
 api:             ## run the API + dashboard + phone page on the LAN
 	$(PY) -m uvicorn api.main:app --host 0.0.0.0 --port $(PORT) --reload
 
-dashboard-dev:   ## dashboard with hot reload on :5173 (proxies the API on :8000; run `make api` too)
-	cd dashboard && npm install && npm run dev
+dashboard-dev:   ## dashboard only, hot reload on :5173 (proxies the API on :8000; run `make api` too)
+	npm install && npm run dev --workspace dashboard
 
 dashboard-build: ## build dashboard/dist/, which `make api` serves at /dashboard/
-	cd dashboard && npm ci && npm run build
+	npm ci && npm run build --workspace dashboard
 
 test:            ## all smoke tests
 	$(PY) -m pytest -q

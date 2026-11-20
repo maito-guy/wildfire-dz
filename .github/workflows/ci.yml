@@ -24,20 +24,13 @@ jobs:
   dashboard:
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    defaults:
-      run:
-        working-directory: dashboard
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: dashboard/package-lock.json
+          cache-dependency-path: package-lock.json
       - run: npm ci
-      - name: typecheck
-        run: npm run typecheck
-      - name: lint
-        run: npm run lint
-      - name: build
-        run: npm run build
+      - name: typecheck, lint, build (turbo)
+        run: npx turbo run typecheck lint build --filter=wildfire-dashboard
