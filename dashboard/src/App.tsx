@@ -10,6 +10,7 @@ import { Controls } from "./components/Controls";
 import type { MapView } from "./components/FireMap";
 import { FireMap } from "./components/FireMap";
 import { Header } from "./components/Header";
+import { Scoreboard } from "./components/Scoreboard";
 import { Settings } from "./components/Settings";
 import { VillageList } from "./components/VillageList";
 import { sortByUrgency } from "./format";
@@ -262,6 +263,7 @@ export default function App() {
           />
           <VillageList villages={villages} busy={busy} onSend={onSend} onCancel={onCancel} />
           <AlertLog alerts={alerts} />
+          <Scoreboard />
           <Settings />
         </aside>
       </main>
