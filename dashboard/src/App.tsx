@@ -14,6 +14,7 @@ import { VillageList } from "./components/VillageList";
 import { sortByUrgency } from "./format";
 
 const POLL_MS = 3000; // refresh villages/alerts while a fire is active
+const HEALTH_MS = 5000; // phones/dashboards connected, pending alerts
 const PLAY_MS = 2500; // one replay pass every 2.5 s
 
 function errorText(e: unknown): string {
@@ -56,6 +57,12 @@ export default function App() {
 
   // Ignore late /predict answers when a newer one was asked for (play, fast clicks).
   const predictSeq = useRef(0);
+
+  const healthQ = useQuery({
+    queryKey: ["health"],
+    queryFn: ({ signal }) => api.health(signal),
+    refetchInterval: HEALTH_MS,
+  });
 
   const fires = useQuery({ queryKey: ["replays"], queryFn: api.replays });
   const villagesQ = useQuery({
@@ -209,7 +216,10 @@ export default function App() {
 
   return (
     <div className="app">
-      <Header prediction={prediction} />
+      <Header
+        prediction={prediction}
+        health={{ data: healthQ.data, unreachable: healthQ.isError, updatedAt: healthQ.dataUpdatedAt }}
+      />
       <main>
         <FireMap
           prediction={prediction}

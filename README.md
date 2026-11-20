@@ -7,21 +7,28 @@ and send an emergency alert to every phone in the area (UK-style, simulated on t
 
 ## 5-minute setup
 
-Needs Python **3.11** and git. On Windows use WSL, or run the commands inside the Makefile by hand.
+Needs Python **3.11**, Node **22.12+** and git. On Windows use WSL, or run the commands inside the Makefile by hand.
 No `python3.11` on your machine? `uv venv -p 3.11 .venv && uv pip install -p .venv -r requirements-dev.txt` does the same as `make setup`.
 
 ```bash
 git clone <repo-url> && cd <repo>
-make setup            # .venv + deps + .env from .env.example
-make test             # all smoke tests should pass
-make api              # http://localhost:8000  → dashboard
+make setup            # .venv + deps + .env from .env.example (or the uv command above)
+npm ci                # root install: npm workspaces (dashboard, api) + Turborepo
+npx turbo dev         # API on http://localhost:8000 + dashboard on http://localhost:5173/dashboard/ (or `make dev`)
 ```
 
-- Dashboard (Civil Protection): `http://localhost:8000/dashboard/`. Build it once first with `make dashboard-build`
-  (needs Node 22+; writes `dashboard/dist/`). Without a build, the API still starts and logs a warning.
-- Dashboard development: `make api` in one terminal, `make dashboard-dev` in another, then open
-  `http://localhost:5173/dashboard/` (Vite hot reload, API calls proxied to :8000). Checks: `npm run typecheck`,
-  `npm run lint`, `npm run build` in `dashboard/`. After changing `api/schemas.py`, run `npm run gen:api` (API running) and commit `src/api/schema.ts`.
+`.venv` must exist before any turbo command: the `api` workspace (`api/package.json`) only wraps the Python tools
+(`.venv/bin/python -m uvicorn`, `.venv/bin/ruff`, `.venv/bin/python -m pytest`) and runs them from the repo root.
+
+- **Every check:** `npx turbo lint typecheck test build` (ruff + pytest for the API; ESLint, `tsc` and `vite build` for the
+  dashboard). Turborepo caches each task, so a second run only re-runs what changed. The Python checks also run alone
+  with `make lint test`.
+- **Dashboard (Civil Protection):** in dev, `http://localhost:5173/dashboard/` (Vite hot reload, API calls proxied to :8000).
+  For the demo, `make dashboard-build` writes `dashboard/dist/` and `make api` serves it at `http://localhost:8000/dashboard/`.
+  Without a build, the API still starts and logs a warning.
+- **One side only:** `make api` (API alone, also serves the built dashboard) or `make dashboard-dev` (Vite alone).
+- **One lockfile:** the root `package-lock.json`. Add dashboard packages with `npm install <pkg> --workspace dashboard`.
+- After changing `api/schemas.py`, run `npm run gen:api --workspace dashboard` (API running) and commit `dashboard/src/api/schema.ts`.
 - Test phone alert page: `make lan-ip` prints `http://<laptop-ip>:8000/alert/`. Open it on each phone (same Wi-Fi) and tap **arm**.
 - API docs (auto): `http://localhost:8000/docs`
 

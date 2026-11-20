@@ -1,4 +1,4 @@
-import type { Alert, Village } from "./api/client";
+import type { Alert, PredictResponse, Village } from "./api/client";
 
 type Status = Village["status"] | Alert["level"];
 
@@ -49,3 +49,37 @@ const ALERT_STATUS: Record<Alert["status"], string> = {
 };
 
 export const alertStatusWord = (s: Alert["status"]): string => ALERT_STATUS[s];
+
+const WIND_SOURCE: Record<PredictResponse["wind_source"], string> = {
+  request: "set by operator",
+  forecast: "forecast",
+  reanalysis: "ERA5 archive",
+  config_default: "default (offline)",
+};
+
+export const windSourceWord = (s: PredictResponse["wind_source"]): string => WIND_SOURCE[s];
+
+export function fmtWind(w: PredictResponse["wind"]): string {
+  return `${Math.round(w.speed_kmh)} km/h from ${Math.round(w.from_deg)}°`;
+}
+
+// Local wall-clock time, 24 h, e.g. "14:05".
+export const fmtClock = (t: string | number): string =>
+  new Date(t).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+
+// When the alert last changed state: the timestamp that matches its status.
+export function lastChangeAt(a: Alert): string {
+  switch (a.status) {
+    case "sent":
+      return a.approved_at ?? a.created_at;
+    case "rejected":
+      return a.rejected_at ?? a.created_at;
+    case "cancelled":
+      return a.cancelled_at ?? a.created_at;
+    case "pending":
+      return a.created_at;
+  }
+}
+
+// Only published alerts have a CAP message (Alert for sent, Cancel for cancelled).
+export const hasCap = (a: Alert): boolean => a.status === "sent" || a.status === "cancelled";

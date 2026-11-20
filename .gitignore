@@ -36,3 +36,7 @@ __pycache__/
 # dashboard (npm)
 dashboard/node_modules/
 dashboard/dist/
+
+# npm workspaces + Turborepo (root)
+/node_modules/
+.turbo/
