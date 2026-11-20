@@ -7,6 +7,7 @@ const WORDS: Record<Status, string> = {
   get_ready: "Get ready",
   safe: "Safe",
   update: "Update",
+  preventive: "Preventive",
 };
 
 export const statusWord = (s: Status): string => WORDS[s];
@@ -16,6 +17,7 @@ export const STATUS_COLOR: Record<Status, string> = {
   get_ready: "#e07000",
   safe: "#2e7d32",
   update: "#1565c0",
+  preventive: "#6a1b9a",
 };
 
 export function fmtAge(min: number | null | undefined): string {
@@ -38,3 +40,12 @@ export function sortByUrgency(villages: Village[]): Village[] {
       a.distance_km - b.distance_km,
   );
 }
+
+const ALERT_STATUS: Record<Alert["status"], string> = {
+  pending: "pending approval",
+  sent: "sent",
+  rejected: "rejected",
+  cancelled: "cancelled",
+};
+
+export const alertStatusWord = (s: Alert["status"]): string => ALERT_STATUS[s];

@@ -73,6 +73,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/alerts/{alert_id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Approve */
+        post: operations["approve_alerts__alert_id__approve_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/alerts/{alert_id}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reject */
+        post: operations["reject_alerts__alert_id__reject_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/alerts/{alert_id}/cancel": {
         parameters: {
             query?: never;
@@ -97,8 +131,31 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Stream */
+        /**
+         * Stream
+         * @description Phones: sent alerts and cancels only. Pending or rejected flags never go here.
+         */
         get: operations["stream_alerts_stream_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Events
+         * @description Dashboards: flag, flag_updated, alert_sent, alert_rejected, alert_cancelled.
+         */
+        get: operations["events_events_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -213,17 +270,17 @@ export interface components {
              * Level
              * @enum {string}
              */
-            level: "get_ready" | "leave_now" | "update";
+            level: "get_ready" | "leave_now" | "update" | "preventive";
             /**
              * Source
              * @enum {string}
              */
-            source: "auto" | "manual";
+            source: "ai_spread" | "ai_risk" | "manual";
             /**
              * Status
              * @enum {string}
              */
-            status: "sent" | "cancelled";
+            status: "pending" | "sent" | "rejected" | "cancelled";
             /**
              * Created At
              * Format: date-time
@@ -234,8 +291,19 @@ export interface components {
              * Format: date-time
              */
             scenario_time: string;
+            /** Approved At */
+            approved_at?: string | null;
+            /** Rejected At */
+            rejected_at?: string | null;
+            /** Reject Reason */
+            reject_reason?: string | null;
             /** Cancelled At */
             cancelled_at?: string | null;
+            /**
+             * Edited
+             * @default false
+             */
+            edited: boolean;
             /** Minutes Left */
             minutes_left: number | null;
             /** Distance Km */
@@ -251,6 +319,15 @@ export interface components {
             texts: {
                 [key: string]: string;
             };
+        };
+        /** AlertApprove */
+        AlertApprove: {
+            /** Texts */
+            texts?: {
+                [key: string]: string;
+            } | null;
+            /** Radius Km */
+            radius_km?: number | null;
         };
         /** AlertArea */
         AlertArea: {
@@ -272,7 +349,12 @@ export interface components {
              * @default leave_now
              * @enum {string}
              */
-            level: "get_ready" | "leave_now" | "update";
+            level: "get_ready" | "leave_now" | "update" | "preventive";
+        };
+        /** AlertReject */
+        AlertReject: {
+            /** Reason */
+            reason: string;
         };
         /** Cell */
         Cell: {
@@ -347,7 +429,7 @@ export interface components {
              * Wind Source
              * @enum {string}
              */
-            wind_source: "request" | "forecast" | "config_default";
+            wind_source: "request" | "forecast" | "reanalysis" | "config_default";
             /** Embers Applied */
             embers_applied: boolean;
             /** Zones */
@@ -515,6 +597,7 @@ export interface operations {
         parameters: {
             query?: {
                 fire_id?: string | null;
+                status?: ("pending" | "sent" | "rejected" | "cancelled") | null;
             };
             header?: never;
             path?: never;
@@ -545,7 +628,9 @@ export interface operations {
     send_manual_alerts_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "x-operator-token"?: string | null;
+            };
             path?: never;
             cookie?: never;
         };
@@ -575,10 +660,86 @@ export interface operations {
             };
         };
     };
+    approve_alerts__alert_id__approve_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-operator-token"?: string | null;
+            };
+            path: {
+                alert_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["AlertApprove"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Alert"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reject_alerts__alert_id__reject_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-operator-token"?: string | null;
+            };
+            path: {
+                alert_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AlertReject"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Alert"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     cancel_alerts__alert_id__cancel_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "x-operator-token"?: string | null;
+            };
             path: {
                 alert_id: string;
             };
@@ -633,6 +794,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    events_events_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
         };
@@ -711,7 +892,9 @@ export interface operations {
     reset_reset_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "x-operator-token"?: string | null;
+            };
             path?: never;
             cookie?: never;
         };
@@ -724,6 +907,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

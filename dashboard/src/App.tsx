@@ -115,14 +115,16 @@ export default function App() {
     try {
       const r = await queryClient.fetchQuery({ queryKey: ["replay", id], queryFn: () => api.replay(id) });
       setReplay(r);
+      let resetError = "";
       try {
         await api.reset();
       } catch (e) {
-        setInfo(`Reset before replay failed: ${errorText(e)}`);
+        resetError = `Reset before replay failed: ${errorText(e)}`;
       }
       const first = r.passes[0]?.burning[0];
       if (first) setView((v) => ({ center: [first.lat, first.lon], zoom: 11, seq: (v?.seq ?? 0) + 1 }));
       await showPass(r, 0);
+      if (resetError) setInfo(resetError); // after showPass, which clears the message on success
     } catch (e) {
       setInfo(errorText(e));
     }
