@@ -16,7 +16,7 @@ from fastapi import Body, Depends, FastAPI, Header, HTTPException, Request
 from fastapi.responses import RedirectResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
-from api import cap, impact, predictor, replay, weather
+from api import cap, detections, impact, predictor, replay, weather
 from api.alerts import LANGS, Broker, store
 from api.schemas import (
     Alert,
@@ -24,6 +24,8 @@ from api.schemas import (
     AlertCreate,
     AlertReject,
     AlertStatus,
+    DetectionsResponse,
+    HistoryResponse,
     PredictRequest,
     PredictResponse,
     VillagesResponse,
@@ -226,6 +228,22 @@ async def replay_passes(fire_id: str):
     if r is None:
         raise HTTPException(404, f"unknown replay fire {fire_id}")
     return r
+
+
+# --- Fire map (#29): satellite detections and fire history (api/detections.py) ---------------------------
+@app.get("/detections", response_model=DetectionsResponse)
+def get_detections(since: dt.datetime | None = None, until: dt.datetime | None = None):
+    """Detections since..until (default: the 7 days before the newest), newest first. Stub until data exists."""
+    try:
+        return detections.detections(_utc(since) if since else None, _utc(until) if until else None)
+    except ValueError as e:
+        raise HTTPException(422, str(e)) from e
+
+
+@app.get("/history", response_model=HistoryResponse)
+def get_history():
+    """Fire history grid (all years). Stub until history_grid.parquet or detections.parquet exists."""
+    return detections.history()
 
 
 @app.get("/scoreboard")
