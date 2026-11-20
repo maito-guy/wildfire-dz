@@ -34,6 +34,18 @@ export interface Replay {
   passes: ReplayPass[];
 }
 
+// /health has no response_model either. Mirrors docs/contracts.md.
+export interface Health {
+  ok: boolean;
+  fires: number;
+  phones_connected: number;
+  dashboards_connected: number;
+  pending_alerts: number;
+  model_c_exported: boolean;
+  places: "real" | "stub";
+  replay: "real" | "stub";
+}
+
 // Zone features from /predict (`zones` is a GeoJSON FeatureCollection).
 export interface ZoneFeature {
   type: "Feature";
@@ -61,6 +73,8 @@ async function request<T>(path: string, init: RequestInit = {}, write = false): 
   return (await r.json()) as T;
 }
 
+const HEALTH_TIMEOUT_MS = 10_000; // generous: one round trip on "Slow 3G" is about 2 s
+
 const q = (fireId: string) => `?fire_id=${encodeURIComponent(fireId)}`;
 
 export const api = {
@@ -76,6 +90,12 @@ export const api = {
 
   cancelAlert: (alertId: string) =>
     request<Alert>(`/alerts/${encodeURIComponent(alertId)}/cancel`, { method: "POST" }, true),
+
+  // A hung server must count as unreachable, not as "still loading" forever.
+  health: (signal: AbortSignal) =>
+    request<Health>("/health", { signal: AbortSignal.any([signal, AbortSignal.timeout(HEALTH_TIMEOUT_MS)]) }),
+
+  capUrl: (alertId: string) => `/alerts/${encodeURIComponent(alertId)}/cap.xml`,
 
   replays: () => request<ReplayFire[]>("/replay"),
 
