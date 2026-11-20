@@ -12,7 +12,7 @@ entries short and factual. Use absolute dates (YYYY-MM-DD).
 ## 1. Current state
 
 - **Phase:** delivery (`RULES.md`, `PROJECT_MANAGEMENT_RULES.md` §9–13). Spec: `SPEC.md` v0.3.1.
-- **Running:** wave 1 (the agents and their issues are listed in §4).
+- **Running:** wave 1 (3 agents, worktrees `.claude/worktrees/{24,14,32}`): #24 approval API, #14 forecast wind, #32 React dashboard.
 - **Next up:** review and merge wave 1 PRs into `dev`, then wave 2 from the newly unblocked issues (#25, #26, #10).
 - **Blockers:** data issues #4 #5 #6 #17 need the Algeria Fire Map export and a laptop run (Electronics); #8 #11 need humans (design, translations).
 
@@ -96,3 +96,5 @@ _None yet._
 - No `python3.11` on the owner's laptop, so `make setup` fails. Use uv (C-05).
 - The network drops sometimes. Retry `git push` and `gh` calls that fail with "no route to host" or "unexpected disconnect".
 - CI runs on `pull_request` (any base) and on push to `main` only, not on push to `dev`.
+- `scripts/merge-pr.sh` needs `gh pr update-branch`, which gh 2.45 lacks. Manual sequence: check the PR is based on the latest `origin/dev` (else merge `origin/dev` into the branch and push), wait for the `ci` run on the head SHA (`gh run list --workflow ci --commit <sha>`, then `gh run watch`), then `gh pr merge <n> --squash --subject "<title> (#<n>)" --body ""`.
+- `Closes #N` does not auto-close issues on merges into `dev` (not the default branch). Close them by hand with a comment linking the PR.
