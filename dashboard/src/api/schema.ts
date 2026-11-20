@@ -218,6 +218,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/detections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Detections
+         * @description Detections since..until (default: the 7 days before the newest), newest first. Stub until data exists.
+         */
+        get: operations["get_detections_detections_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get History
+         * @description Fire history grid (all years). Stub until history_grid.parquet or detections.parquet exists.
+         */
+        get: operations["get_history_history_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/scoreboard": {
         parameters: {
             query?: never;
@@ -405,10 +445,86 @@ export interface components {
             /** Arrival Min */
             arrival_min: number;
         };
+        /** Detection */
+        Detection: {
+            /** Lat */
+            lat: number;
+            /** Lon */
+            lon: number;
+            /**
+             * T
+             * Format: date-time
+             */
+            t: string;
+            /** Satellite */
+            satellite?: string | null;
+            /** Frp */
+            frp?: number | null;
+            /** Confidence */
+            confidence?: string | null;
+            /** Daynight */
+            daynight?: string | null;
+        };
+        /** DetectionsResponse */
+        DetectionsResponse: {
+            /** Stub */
+            stub: boolean;
+            /** Newest */
+            newest: string | null;
+            /**
+             * Since
+             * Format: date-time
+             */
+            since: string;
+            /**
+             * Until
+             * Format: date-time
+             */
+            until: string;
+            /** Count */
+            count: number;
+            /** Truncated */
+            truncated: boolean;
+            /** Detections */
+            detections: components["schemas"]["Detection"][];
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
+        };
+        /** HistoryCell */
+        HistoryCell: {
+            /** Lat */
+            lat: number;
+            /** Lon */
+            lon: number;
+            /** Count */
+            count: number;
+            /** Years */
+            years?: number | null;
+            /** Last Year */
+            last_year?: number | null;
+        };
+        /** HistoryResponse */
+        HistoryResponse: {
+            /** Stub */
+            stub: boolean;
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "grid" | "detections" | "stub";
+            /** Cell Deg */
+            cell_deg: number;
+            /** First Year */
+            first_year: number | null;
+            /** Last Year */
+            last_year: number | null;
+            /** Max Count */
+            max_count: number;
+            /** Cells */
+            cells: components["schemas"]["HistoryCell"][];
         };
         /** LatLon */
         LatLon: {
@@ -999,6 +1115,58 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_detections_detections_get: {
+        parameters: {
+            query?: {
+                since?: string | null;
+                until?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DetectionsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_history_history_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HistoryResponse"];
                 };
             };
         };

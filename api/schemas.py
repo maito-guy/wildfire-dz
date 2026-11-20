@@ -152,3 +152,42 @@ class RiskResponse(BaseModel):
     flag_level: RiskLevel                      # places near cells at this level are flagged
     cells: list[RiskCell]                      # levels >= risk.min_level_shown, highest score first
     places: list[RiskPlace]                    # flagged places, highest score first
+
+
+# --- Fire map (#29): GET /detections, GET /history ---------------------------------------------------
+class Detection(BaseModel):
+    lat: float
+    lon: float
+    t: datetime                                # acquisition time (UTC)
+    satellite: str | None = None               # SNPP | NOAA20 | NOAA21
+    frp: float | None = None                   # fire radiative power, MW
+    confidence: str | None = None              # n (nominal) | h (high); low-confidence rows are dropped upstream
+    daynight: str | None = None                # D | N
+
+
+class DetectionsResponse(BaseModel):
+    stub: bool                                 # true = synthetic detections, not real data
+    newest: datetime | None                    # newest detection in the data; the "last 24 h / 7 days" clock
+    since: datetime
+    until: datetime
+    count: int
+    truncated: bool                            # more matched than fire_map.max_points (the newest are kept)
+    detections: list[Detection]                # newest first
+
+
+class HistoryCell(BaseModel):
+    lat: float                                 # cell centre
+    lon: float
+    count: int                                 # detections in the cell, all years
+    years: int | None = None                   # distinct years with a detection
+    last_year: int | None = None
+
+
+class HistoryResponse(BaseModel):
+    stub: bool
+    source: Literal["grid", "detections", "stub"]   # history_grid.parquet, aggregated detections, or stub
+    cell_deg: float                            # cell size in degrees (lat and lon)
+    first_year: int | None
+    last_year: int | None
+    max_count: int
+    cells: list[HistoryCell]

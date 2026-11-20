@@ -6,6 +6,8 @@ paths:
   train_table: data/out/train.parquet
   places: data/out/places.parquet          # OSM settlements (id, name, lat, lon); falls back to stub places if missing
   replay_passes: data/out/replay_passes.parquet  # held-out fire passes (see docs/contracts.md); falls back to a synthetic fire
+  detections: data/out/detections.parquet  # VIIRS detections for the fire map (#29); falls back to stub detections
+  history_grid: data/out/history_grid.parquet  # pre-aggregated fire history (#29); else built from detections, else stub
   artifacts: model/artifacts               # model_c.txt, thresholds.json, scoreboard.json, features.json
   alert_texts: alert/texts.json
   risk_today: model/artifacts/risk_today.parquet  # daily risk cells from model.risk (#27, docs/contracts.md); stub cells if missing
@@ -119,3 +121,10 @@ risk:                                      # today's risk layer and preventive f
     moderate: 0.3                          # PLACEHOLDER
     high: 0.55                             # PLACEHOLDER
     very_high: 0.8                         # PLACEHOLDER
+fire_map:                                  # GET /detections and GET /history (api/detections.py, #29)
+  default_hours: 168                       # /detections without `since`: the 7 days before the newest detection
+  max_points: 20000                        # newest first; the response says `truncated` when more matched
+  bbox: [-2.3, 34.5, 8.7, 37.2]            # [lon_min, lat_min, lon_max, lat_max] Algeria's north, used when there is no `country` column
+  flare_min_days: 15                       # gas flares: a 750 m block seen on this many distinct days ...
+  flare_min_years: 3                       # ... across this many years is dropped (same rule as data/firedata/02_clean.py)
+  history_cell_deg: 0.05                   # history grid cell (~5 km) when the API aggregates detections itself
