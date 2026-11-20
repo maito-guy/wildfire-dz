@@ -17,6 +17,10 @@ and a message in the team chat naming who is affected. Everything is WGS84 lat/l
 - **#21 (scoreboard view).** `GET /scoreboard` without `scoreboard.json` now serves a stub of the full shape,
   flagged `stub: true`, every metric `null` (was `{"status", "weather_note", "fires": []}`). New optional
   `replay_counter` (the "warned X before vs old method" counter). Additive; affected: dashboard, `model.evaluate` (#19).
+- **v0.5 (#29, fire map).** New files `data/out/detections.parquet` and `data/out/history_grid.parquet` (Data writes
+  them; read by `api/detections.py`) and new `GET /detections` and `GET /history`. Until the files exist both serve
+  deterministic stub data (`stub: true`). New `config.yaml` keys `paths.detections`, `paths.history_grid` and section
+  `fire_map:`. Affected: Data (writes the files), dashboard (fire map layers).
 
 ---
 
@@ -52,6 +56,17 @@ A fire is held out if any of its rows falls inside the window **and** bbox (`con
 
 ### `data/out/replay_passes.parquet` → `api/replay.py`
 One row per burning cell per pass: `holdout (str: kabylie_2021 | jijel_guelma_2026), t (UTC timestamp), lat, lon` (+ optional `satellite, frp`).
+
+### `data/out/detections.parquet` → `api/detections.py` *(added v0.5, #29)*
+One row per satellite detection (VIIRS 375 m): `lat, lon (float), t (UTC timestamp)` required; optional `satellite,
+frp (MW), confidence (n|h), daynight`, `country` (rows other than `DZA` are dropped) and `flare` (bool, dropped when true).
+FIRMS names `latitude`, `longitude`, `sat`, `conf` are accepted. The API keeps rows north of `scope.lat_min` and removes
+gas flares (a 750 m block lit on ≥ `fire_map.flare_min_days` days across ≥ `fire_map.flare_min_years` years).
+
+### `data/out/history_grid.parquet` → `api/detections.py` *(added v0.5, #29)*
+One row per grid cell: `lat, lon (cell centre), count (int)` required; optional `years` (years with fire), `last_year`,
+`first_year`. Build it from the detections with `python -m api.detections build-history`; without it the API
+aggregates `detections.parquet` itself (`fire_map.history_cell_deg`), and without either it serves a stub.
 
 ### `model/artifacts/` → API (git-ignored; share via Drive)
 | File | Writer | Content |
@@ -343,6 +358,26 @@ with `"stub": true`, `"status": "not measured yet"`, one entry per `config.yaml 
   `village`, `lead_min`, `old_method_lead_min` is `null`, the dashboard shows "not measured".
 - Model keys are free-form (`A`, `B`, `C_<tag>`); the dashboard shows whichever are present. Extra keys
   (`n_rows`, `n_burned_cells`) are ignored.
+
+### `GET /detections?since=&until=` *(added v0.5, #29)*
+Satellite detections for the fire map, newest first. No token. Without `since`: the `fire_map.default_hours` (168 h)
+before the newest detection. ISO times; a bad time → 422.
+```json
+{"stub": false, "newest": "2026-08-30T10:40:00Z", "since": "2026-08-23T10:40:00Z", "until": "2026-08-30T10:40:00Z",
+ "count": 365, "truncated": false,
+ "detections": [{"lat": 36.745, "lon": 5.988, "t": "2026-08-30T10:40:00Z", "satellite": "SNPP", "frp": 25.2,
+                 "confidence": "n", "daynight": "D"}]}
+```
+At most `fire_map.max_points` rows; `truncated: true` when more matched. The dashboard splits them into the last 24 h
+before `newest` and 1–7 days ago.
+
+### `GET /history` *(added v0.5, #29)*
+Fire history grid, all years. No token.
+```json
+{"stub": false, "source": "grid", "cell_deg": 0.05, "first_year": 2012, "last_year": 2026, "max_count": 121,
+ "cells": [{"lat": 36.625, "lon": 4.125, "count": 12, "years": 4, "last_year": 2021}]}
+```
+`source`: `grid` (history_grid.parquet), `detections` (aggregated by the API) or `stub` (fake, with `stub: true`).
 
 ### `GET /health` *(added v0.1)*
 ```json
