@@ -4,6 +4,7 @@ import { useEffect, useEffectEvent, useRef, useState } from "react";
 import type { LatLon, PredictResponse, Replay, Village } from "./api/client";
 import { api, ApiError } from "./api/client";
 import { AlertLog } from "./components/AlertLog";
+import { ApprovalQueue } from "./components/ApprovalQueue";
 import type { WindInput } from "./components/Controls";
 import { Controls } from "./components/Controls";
 import type { MapView } from "./components/FireMap";
@@ -12,6 +13,7 @@ import { Header } from "./components/Header";
 import { Settings } from "./components/Settings";
 import { VillageList } from "./components/VillageList";
 import { sortByUrgency } from "./format";
+import { useLiveEvents } from "./hooks/useEventSource";
 
 const POLL_MS = 3000; // refresh villages/alerts while a fire is active
 const HEALTH_MS = 5000; // phones/dashboards connected, pending alerts
@@ -37,6 +39,7 @@ function passInfoText(r: Replay, i: number): string {
 
 export default function App() {
   const queryClient = useQueryClient();
+  const live = useLiveEvents(); // GET /events: refreshes alerts and villages on every flag/alert event
 
   const [wind, setWind] = useState<WindInput>({ speedKmh: 30, fromDeg: 270 });
   const [showTruth, setShowTruth] = useState(true);
@@ -250,6 +253,12 @@ export default function App() {
             showTruth={showTruth}
             onShowTruth={setShowTruth}
             onReset={onReset}
+          />
+          <ApprovalQueue
+            live={live.state}
+            fireId={fireId}
+            villages={villages}
+            onSelect={(a) => setView((v) => ({ center: [a.area.lat, a.area.lon], zoom: 13, seq: (v?.seq ?? 0) + 1 }))}
           />
           <VillageList villages={villages} busy={busy} onSend={onSend} onCancel={onCancel} />
           <AlertLog alerts={alerts} />
