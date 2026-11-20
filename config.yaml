@@ -99,3 +99,9 @@ forecast:                                  # Open-Meteo wind for /predict when t
   timeout_s: 3
   cache_min: 15
   past_days: 10                            # times newer than now - past_days use the forecast API (the ERA5 archive lags ~5 days)
+
+cap:                                       # CAP 1.2 message for the simulated cell broadcast (api/cap.py)
+  sender: "alerts@civil-protection.example.dz"
+  sender_name: "Protection Civile — simulated"
+  identifier_prefix: "DZ.WILDFIRE"
+  status: Exercise                         # Actual only for a real deployment

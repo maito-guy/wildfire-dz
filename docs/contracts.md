@@ -12,6 +12,8 @@ and a message in the team chat naming who is affected. Everything is WGS84 lat/l
   `approved_at`, `rejected_at`, `reject_reason`, `edited`. New: `POST /alerts/{id}/approve`, `POST /alerts/{id}/reject`,
   `GET /events`, `GET /alerts?status=`. Write endpoints take `X-Operator-Token`. `/health` adds
   `dashboards_connected` and `pending_alerts`. Affected: dashboard (queue), phone page (unchanged shape), CAP (#26), risk flags (#28).
+- **v0.3 (#26, CAP message).** New `GET /alerts/{id}/cap.xml` (CAP 1.2, Alert or Cancel) and the simulated
+  cell-broadcast hand-off log line. New `config.yaml` section `cap:`. Alert object unchanged. Affected: dashboard (link to the XML).
 
 ---
 
@@ -231,6 +233,30 @@ Optional body (edits made by the operator before sending):
 No body → 200 Alert object with `status: "cancelled"`, `cancelled_at` set. It pushes a `cancel` event to the phones and
 `alert_cancelled` to `/events`. It does not re-arm the auto rule at that level for that village.
 404 if the id is unknown, 409 if the alert is not `sent` (a pending flag is rejected, not cancelled).
+
+### `GET /alerts/{id}/cap.xml` *(added v0.3, #26)*
+No token (public once sent). → 200 `application/xml`: an OASIS **CAP 1.2** message (`urn:oasis:names:tc:emergency:cap:1.2`),
+the one the operators' cell broadcast centres would receive. 404 unknown id, 409 if the alert is `pending` or `rejected`
+(never published).
+- `sent` alert → `msgType` `Alert`, `identifier` `<cap.identifier_prefix>.<alert id>` (e.g. `DZ.WILDFIRE.al_0001`),
+  `sent` = `approved_at` (UTC, `YYYY-MM-DDThh:mm:ss+00:00`).
+- `cancelled` alert → `msgType` `Cancel`, `identifier` `<…>.<alert id>.cancel`, `sent` = `cancelled_at`,
+  `references` = `sender,identifier,sent` of the original Alert message.
+- `sender`, `senderName`, `status` (`Exercise` in the demo) come from `config.yaml` `cap:`. `scope` is `Public`.
+- One `<info>` per language in `texts`: `language` `ar`/`ary` → `ar-DZ`, `kab` → `kab-DZ`, `fr` → `fr-DZ`, `en` → `en`;
+  `category` `Fire`, `event` `Wildfire`, `headline` from `alert/texts.json` (fallback `en`), `description` = the text,
+  `parameter`s `minutes_left` (left out when null), `distance_km`, `leave_toward`, `data_age_min`, `wildfire_alert_id`,
+  and `<area>` with `areaDesc` = village name and `circle` = `lat,lon radius_km`.
+
+| `level` | `responseType` | `urgency` | `severity` | `certainty` |
+| --- | --- | --- | --- | --- |
+| `leave_now` | `Evacuate` | `Immediate` | `Extreme` | `Likely` |
+| `get_ready` | `Prepare` | `Expected` | `Severe` | `Likely` |
+| `preventive` | `Monitor` | `Future` | `Moderate` | `Possible` |
+| `update` | `Monitor` | `Expected` | `Moderate` | `Possible` |
+
+Simulated hand-off: when an alert becomes `sent` or `cancelled`, the API logs one line
+`CBC hand-off (simulated): <identifier> <msgType> area=<lat,lon r> km` (logger `api.cap`). No new SSE event, no new Alert field.
 
 ### `GET /alerts?fire_id=<id>&status=<status>` *(added v0.1, `status` v0.2)*
 → `[Alert, ...]` in creation order. Both filters are optional. `status` is one of `pending | sent | rejected | cancelled`.
