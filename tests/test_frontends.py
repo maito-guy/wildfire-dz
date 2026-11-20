@@ -33,3 +33,43 @@ def test_alert_texts_have_english_masters_and_valid_placeholders():
         for lang, tpl in t["templates"][level].items():
             used = {f for _, f, _, _ in string.Formatter().parse(tpl) if f}
             assert used <= allowed, (level, lang, used - allowed)
+
+
+def test_alert_page_shows_every_level_word():
+    js = read("alert/alert.js")
+    for word in ("EXTREME ALERT", "LEAVE NOW", "SEVERE ALERT", "GET READY", "FIRE RISK TODAY", "UPDATE",
+                 "Alert cancelled by Civil Protection"):
+        assert word in js, word
+    css = read("alert/style.css")
+    for level in ("leave_now", "get_ready", "preventive", "update", "cancelled"):
+        assert f".alert.{level}" in css, level
+
+
+def test_alert_page_arm_screen_and_sound():
+    html, js = read("alert/index.html"), read("alert/alert.js")
+    assert "Arm this phone" in html and "Simulated cell broadcast — demo" in html
+    assert "Dismiss" in html
+    for api in ("AudioContext", "requestFullscreen", "wakeLock", "navigator.vibrate", "localStorage"):
+        assert api in js, api
+    assert "Connected" in js and "Reconnecting…" in js
+    assert '"hello"' in js and 'addEventListener("alert"' in js
+
+
+def test_alert_page_languages_and_direction():
+    js = read("alert/alert.js")
+    assert 'RTL = ["ar", "ary"]' in js
+    assert "headline" in js and "leave_toward" in js and "data_age_min" in js
+    for point in ("N", "NE", "E", "SE", "S", "SW", "W", "NW"):
+        assert f"{point}: [" in js, point
+
+
+def test_alert_page_never_says_safe():
+    for p in ("alert/index.html", "alert/alert.js"):
+        assert "safe" not in read(p).lower(), p
+
+
+def test_alert_page_fits_a_phone():
+    html, css = read("alert/index.html"), read("alert/style.css")
+    assert 'name="viewport"' in html and "width=device-width" in html
+    assert "overflow-x: hidden" in css
+    assert "font: 18px" in css  # body text at least 18 px
