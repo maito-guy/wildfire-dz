@@ -27,9 +27,10 @@ export const RISK_WORD: Record<RiskLevel, string> = {
   low: "Low",
 };
 
+// Sequential in the DESIGN.md palette (no new hues): sand → flame → fire text red. The word is always shown too.
 export const RISK_COLOR: Record<RiskLevel, string> = {
-  very_high: "#6a1b9a",
-  high: "#f57c00",
-  moderate: "#f2c200",
-  low: "#9e9e9e",
+  very_high: "#B8161B",
+  high: "#F26A21",
+  moderate: "#F2B48A",
+  low: "#D6D0C5",
 };

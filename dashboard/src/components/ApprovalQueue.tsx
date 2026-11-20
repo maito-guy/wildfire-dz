@@ -1,24 +1,21 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import type { Alert, Village } from "../api/client";
+import type { Alert } from "../api/client";
 import type { AlertApprove } from "../api/approval";
 import { approval, PENDING_KEY, sortQueue, writeErrorText } from "../api/approval";
 import type { StreamState } from "../hooks/useEventSource";
 import { ApprovalCard } from "./ApprovalCard";
-import "./ApprovalQueue.css";
-import { NewAlertForm } from "./NewAlertForm";
+import { WifiSlash } from "@phosphor-icons/react";
 
 const FALLBACK_POLL_MS = 10_000; // only while /events is down
 
 interface Props {
   live: StreamState;
-  fireId: string | null;
-  villages: Village[];
   /** Show this alert's village on the map. */
   onSelect: (a: Alert) => void;
 }
 
-export function ApprovalQueue({ live, fireId, villages, onSelect }: Props) {
+export function ApprovalQueue({ live, onSelect }: Props) {
   const queryClient = useQueryClient();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const pending = useQuery({
@@ -52,22 +49,29 @@ export function ApprovalQueue({ live, fireId, villages, onSelect }: Props) {
   const onReject = (a: Alert, reason: string) => run(a, () => approval.reject(a.id, reason));
 
   return (
-    <section className="aq" aria-labelledby="aq-title">
-      <h3 id="aq-title">
-        Approval queue{" "}
-        <span className="small">
-          ({queue.length} pending · most urgent first, preventive below · nothing is sent without a click)
-        </span>
-      </h3>
+    <section className="flex min-h-0 flex-1 flex-col" aria-labelledby="aq-title">
+      <div className="px-4 pb-3 pt-4">
+        <h2 id="aq-title" className="font-display text-[21px] font-bold tracking-[-0.01em]">
+          Approval queue
+        </h2>
+        <p className="font-mono text-xs text-muted-foreground">
+          {queue.length} pending · most urgent first · nothing is sent without a click
+        </p>
+      </div>
       {live === "down" && (
-        <p className="aq-down" role="status">
-          Live updates disconnected — reconnecting. Checking for new flags every 10 s.
+        <p className="mx-4 mb-3 flex items-center gap-2 rounded-lg bg-fire px-3 py-2 text-sm font-semibold text-white" role="alert">
+          <WifiSlash weight="bold" aria-hidden="true" />
+          Live updates disconnected. Reconnecting; checking for new flags every 10 s.
         </p>
       )}
-      {live === "connecting" && <p className="small">Connecting to live updates…</p>}
-      {pending.error && <p className="small error">Could not load the queue: {writeErrorText(pending.error).text}</p>}
-      {pending.isSuccess && queue.length === 0 && <p className="small">No flag waiting for approval.</p>}
-      <ol className="aq-list">
+      {live === "connecting" && <p className="px-4 pb-2 text-sm text-muted-foreground">Connecting to live updates…</p>}
+      {pending.error && (
+        <p className="px-4 pb-2 text-sm font-semibold text-fire-text">Could not load the queue: {writeErrorText(pending.error).text}</p>
+      )}
+      <ol className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto border-t bg-background/60 p-4">
+        {pending.isSuccess && queue.length === 0 && (
+          <li className="text-sm text-muted-foreground">No flag waiting for approval.</li>
+        )}
         {queue.map((a) => (
           <ApprovalCard
             key={a.id}
@@ -82,7 +86,6 @@ export function ApprovalQueue({ live, fireId, villages, onSelect }: Props) {
           />
         ))}
       </ol>
-      <NewAlertForm fireId={fireId} villages={villages} onSent={() => void refresh()} />
     </section>
   );
 }

@@ -3,6 +3,18 @@ import type { Alert } from "../api/client";
 import type { AlertApprove } from "../api/approval";
 import { langsOf, missingLangs, SOURCE_WORD } from "../api/approval";
 import { fmtAge, statusWord } from "../format";
+import { StatusBadge } from "./status-badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { cn } from "@/lib/utils";
+
+const STRIP: Record<Alert["level"], string> = {
+  leave_now: "border-l-fire",
+  get_ready: "border-l-flame",
+  update: "border-l-ink",
+  preventive: "border-l-ink",
+};
 
 interface Props {
   alert: Alert;
@@ -78,64 +90,101 @@ export function ApprovalCard({ alert: a, selected, onSelect, onApprove, onReject
     if (err) setError(err);
   }
 
+  const urgentNumber = a.minutes_left != null && a.level !== "preventive";
   return (
     <li
-      className={`aq-card${selected ? " aq-selected" : ""}`}
+      className={cn(
+        "rounded-xl border border-l-4 bg-card p-3.5 shadow-1 transition-shadow",
+        STRIP[a.level],
+        selected && "ring-2 ring-ink",
+        busy !== "" && "opacity-70",
+      )}
       aria-busy={busy !== ""}
       aria-label={`${a.village_name}, ${statusWord(a.level)}, pending approval`}
     >
-      <button type="button" className="aq-head" onClick={() => onSelect(a)} aria-pressed={selected}>
-        <span className={`badge ${a.level}`}>{statusWord(a.level)}</span>
-        <span className="aq-village">{a.village_name}</span>
-        <span className="aq-minutes">{minutesText(a)}</span>
+      <button
+        type="button"
+        className="flex w-full items-center gap-3 text-left"
+        onClick={() => onSelect(a)}
+        aria-pressed={selected}
+        title="Show on the map"
+      >
+        <span className="min-w-0 flex-1">
+          <span className="flex items-center gap-2">
+            <StatusBadge status={a.level} />
+            <span className="label-mono text-[10px]">Pending · {SOURCE_WORD[a.source]}</span>
+          </span>
+          <span className="mt-1.5 block truncate font-display text-[19px] font-bold leading-tight">{a.village_name}</span>
+        </span>
+        <span className="shrink-0 text-right">
+          {urgentNumber ? (
+            <>
+              <span
+                className={cn(
+                  "block font-display text-[30px] font-extrabold leading-none tracking-[-0.04em] tabular-nums",
+                  a.level === "leave_now" ? "text-fire" : a.level === "get_ready" ? "text-flame" : "text-ink",
+                )}
+              >
+                {a.minutes_left}
+              </span>
+              <span className="label-mono text-[9.5px]">min left</span>
+            </>
+          ) : (
+            <span className="text-xs font-medium text-muted-foreground">{minutesText(a)}</span>
+          )}
+        </span>
       </button>
-      <div className="aq-facts small">
+      <p className="mt-2 font-mono text-[11.5px] leading-relaxed text-muted-foreground tabular-nums">
         {a.level === "preventive"
           ? `fire risk for ${a.scenario_time.slice(0, 10)} (no fire yet)`
-          : `${a.distance_km.toFixed(1)} km from the fire · fire to the ${a.fire_direction} · leave toward ${a.leave_toward} · ${fmtAge(a.data_age_min)}`}{" "}
-        · {SOURCE_WORD[a.source]} · radius {a.area.radius_km} km · pending approval
-        {selected ? " · shown on the map" : ""}
-      </div>
+          : `${a.distance_km.toFixed(1)} km from the fire · fire to the ${a.fire_direction} · leave → ${a.leave_toward} · ${fmtAge(a.data_age_min)}`}{" "}
+        · radius {a.area.radius_km} km{selected ? " · shown on the map" : ""}
+      </p>
 
       {mode !== "edit" && langs.length > 0 && (
-        <div className="aq-preview" aria-label="Texts the phones will show">
+        <div className="mt-3 flex flex-col gap-1.5" aria-label="Texts the phones will show">
           {langs.map((l) => (
-            <div key={l.code} className="aq-text">
-              <span className="small aq-lang">{l.name}</span>
-              <p dir={l.rtl ? "rtl" : "ltr"} lang={l.code}>
+            <div key={l.code} className="rounded-lg bg-secondary/70 px-2.5 py-2">
+              <span className="label-mono block text-[10px]">{l.name}</span>
+              <p
+                dir={l.rtl ? "rtl" : "ltr"}
+                lang={l.code}
+                className={cn("mt-0.5 whitespace-pre-wrap text-[13.5px] leading-snug", l.rtl && "text-right text-[15px] font-medium")}
+              >
                 {a.texts[l.code]}
               </p>
             </div>
           ))}
           {missing.length > 0 && (
-            <p className="small aq-missing">
+            <p className="text-xs text-muted-foreground">
               Not ready yet: {missing.map((l) => l.name).join(", ")}. Phones that chose one of these show{" "}
               {"fr" in a.texts ? "French" : "English"} first.
             </p>
           )}
         </div>
       )}
-      {langs.length === 0 && <p className="small">No alert text yet.</p>}
+      {langs.length === 0 && <p className="mt-2 text-sm text-muted-foreground">No alert text yet.</p>}
 
       {mode === "edit" && (
-        <div className="aq-edit">
+        <div className="mt-3 flex flex-col gap-2.5">
           {langs.map((l) => (
-            <label key={l.code} className="small">
-              {l.name}
-              <textarea
+            <label key={l.code} className="flex flex-col gap-1">
+              <span className="label-mono text-[10px]">{l.name}</span>
+              <Textarea
                 dir={l.rtl ? "rtl" : "ltr"}
                 lang={l.code}
                 rows={3}
                 value={drafts[l.code] ?? ""}
                 onChange={(e) => setDrafts((d) => ({ ...d, [l.code]: e.target.value }))}
                 disabled={busy !== ""}
+                className={cn("bg-card text-[13.5px]", l.rtl && "text-right")}
               />
-              {(drafts[l.code] ?? "").trim() === "" && <span className="error">Text cannot be empty.</span>}
+              {(drafts[l.code] ?? "").trim() === "" && <span className="text-xs font-semibold text-fire-text">Text cannot be empty.</span>}
             </label>
           ))}
-          <label className="small">
-            Radius (km, more than 0 and at most 50){" "}
-            <input
+          <label className="flex items-center gap-2 text-sm">
+            <span className="label-mono text-[10px]">Radius km</span>
+            <Input
               type="number"
               min={0.1}
               max={50}
@@ -143,63 +192,53 @@ export function ApprovalCard({ alert: a, selected, onSelect, onApprove, onReject
               value={radius}
               onChange={(e) => setRadius(e.target.value)}
               disabled={busy !== ""}
+              className="h-8 w-24 tabular-nums"
             />
           </label>
-          {!radiusOk && <span className="small error">Radius must be more than 0 and at most 50 km.</span>}
+          {!radiusOk && <span className="text-xs font-semibold text-fire-text">Radius must be more than 0 and at most 50 km.</span>}
         </div>
       )}
 
       {mode === "reject" && (
-        <label className="small aq-reason">
-          Reason for rejecting (required)
-          <input
-            type="text"
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
-            disabled={busy !== ""}
-            autoFocus
-          />
+        <label className="mt-3 flex flex-col gap-1">
+          <span className="label-mono text-[10px]">Reason for rejecting (required)</span>
+          <Input type="text" value={reason} onChange={(e) => setReason(e.target.value)} disabled={busy !== ""} autoFocus />
         </label>
       )}
 
       {error && (
-        <p className="small error" role="alert">
+        <p className="mt-2 text-xs font-semibold text-fire-text" role="alert">
           {error}
         </p>
       )}
 
-      <div className="aq-actions">
+      <div className="mt-3 flex flex-wrap gap-2">
         {mode === "reject" ? (
           <>
-            <button
-              type="button"
-              className="aq-reject"
-              disabled={busy !== "" || reason.trim() === ""}
-              onClick={reject}
-            >
+            <Button variant="default" size="sm" disabled={busy !== "" || reason.trim() === ""} onClick={reject}>
               {busy === "reject" ? "Rejecting…" : "Confirm reject"}
-            </button>
-            <button type="button" className="ghost" disabled={busy !== ""} onClick={() => setMode("view")}>
+            </Button>
+            <Button variant="outline" size="sm" disabled={busy !== ""} onClick={() => setMode("view")}>
               Back
-            </button>
+            </Button>
           </>
         ) : (
           <>
-            <button type="button" className="aq-approve" disabled={busy !== "" || editInvalid} onClick={approve}>
+            <Button variant="alert" size="sm" disabled={busy !== "" || editInvalid} onClick={approve}>
               {busy === "approve" ? "Sending…" : mode === "edit" ? "Approve & send edited" : "Approve & send"}
-            </button>
+            </Button>
             {mode === "edit" ? (
-              <button type="button" className="ghost" disabled={busy !== ""} onClick={() => setMode("view")}>
+              <Button variant="outline" size="sm" disabled={busy !== ""} onClick={() => setMode("view")}>
                 Discard edits
-              </button>
+              </Button>
             ) : (
-              <button type="button" className="ghost" disabled={busy !== ""} onClick={startEdit}>
+              <Button variant="outline" size="sm" disabled={busy !== ""} onClick={startEdit}>
                 Edit
-              </button>
+              </Button>
             )}
-            <button
-              type="button"
-              className="ghost"
+            <Button
+              variant="outline"
+              size="sm"
               disabled={busy !== ""}
               onClick={() => {
                 setMode("reject");
@@ -207,7 +246,7 @@ export function ApprovalCard({ alert: a, selected, onSelect, onApprove, onReject
               }}
             >
               Reject
-            </button>
+            </Button>
           </>
         )}
       </div>

@@ -7,10 +7,11 @@ import { api } from "./client";
 const DAY_MS = 24 * 3600 * 1000;
 const REFRESH_MS = 5 * 60 * 1000;
 
-export const DETECTION_COLOR = { day: "#c62828", week: "#e08a00" } as const;
+// DESIGN.md palette: last 24 h in fire red, 1–7 days in flame orange.
+export const DETECTION_COLOR = { day: "#E3262B", week: "#F26A21" } as const;
 
 // History: one hue, light to dark (sequential). Light on purpose: it is background context.
-export const HISTORY_RAMP = ["#f6e3c6", "#e9b97d", "#cf8a3e", "#a35a1c", "#6d3410"] as const;
+export const HISTORY_RAMP = ["#E8E3D9", "#D6C3A8", "#B99A78", "#8C6E52", "#5F5A53"] as const;
 
 /** Bucket 0..4 on a log scale of count / max (a few huge fires must not flatten everything else). */
 export function historyBucket(count: number, max: number): number {

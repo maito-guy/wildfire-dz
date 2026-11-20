@@ -1,31 +1,49 @@
-// Civil Protection dashboard. Talks only to the API contract (docs/contracts.md) through src/api/client.ts.
+// Civil Protection dashboard (docs/DESIGN.md). Talks only to the API contract (docs/contracts.md)
+// through src/api/client.ts.
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { LayersControl } from "react-leaflet";
-import { useEffect, useEffectEvent, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useEffectEvent, useRef, useState } from "react";
+import { toast } from "sonner";
 import type { LatLon, PredictResponse, Replay, Village } from "./api/client";
 import { api, ApiError } from "./api/client";
+import { useFireData } from "./api/fireMap";
 import { fetchRisk, RISK_KEY } from "./api/risk";
 import { AlertLog } from "./components/AlertLog";
 import { ApprovalQueue } from "./components/ApprovalQueue";
 import type { WindInput } from "./components/Controls";
 import { Controls } from "./components/Controls";
-import type { MapView } from "./components/FireMap";
-import { FireMap } from "./components/FireMap";
-import { useFireData } from "./api/fireMap";
-import { FireLayers, FireLegend } from "./components/FireLayers";
+import type { Mode } from "./components/Header";
 import { Header } from "./components/Header";
-import { RiskLayer } from "./components/RiskLayer";
+import type { LayerKey, LayerVisibility, MapView } from "./components/map/FireMap";
+import { DemoHint, LayersCard, WeatherCard } from "./components/map/MapOverlays";
 import { RiskPanel } from "./components/RiskPanel";
 import { Scoreboard } from "./components/Scoreboard";
 import { Settings } from "./components/Settings";
+import type { SendLevel } from "./components/VillageList";
 import { VillageList } from "./components/VillageList";
-import { sortByUrgency } from "./format";
+import { fmtClock, sortByUrgency, statusWord, windSourceWord } from "./format";
 import { useLiveEvents } from "./hooks/useEventSource";
+import { Toaster } from "@/components/ui/sonner";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+
+// MapLibre is most of the JS: load it after the lists, so the operator sees villages first on slow links.
+const FireMap = lazy(() => import("./components/map/FireMap").then((m) => ({ default: m.FireMap })));
 
 const POLL_MS = 3000; // refresh villages/alerts while a fire is active
 const HEALTH_MS = 5000; // phones/dashboards connected, pending alerts
 const PLAY_MS = 2500; // one replay pass every 2.5 s
 const RISK_MS = 60_000; // today's risk; reading it also (re)creates the day's preventive flags
+
+const DEFAULT_LAYERS: LayerVisibility = {
+  burning: true,
+  zone1h: true,
+  zone2h: true,
+  villages: true,
+  alertAreas: true,
+  nextPass: true,
+  detections: true,
+  history: true,
+  risk: false,
+};
 
 function errorText(e: unknown): string {
   if (e instanceof ApiError && e.status === 401) {
@@ -39,9 +57,8 @@ function passInfoText(r: Replay, i: number): string {
   const nxt = r.passes[i + 1];
   const gap = nxt ? Math.round((Date.parse(nxt.t) - Date.parse(p.t)) / 60000) : null;
   return (
-    `pass ${i + 1}/${r.passes.length} · ${new Date(p.t).toUTCString()} · ${p.satellite ?? ""}` +
-    (gap != null ? ` · next pass in ${gap} min (black dots)` : " · last pass") +
-    (r.stub ? " · STUB DATA" : "")
+    `pass ${i + 1}/${r.passes.length} · ${new Date(p.t).toUTCString().slice(5, 22)} UTC · ${p.satellite ?? ""}` +
+    (gap != null ? ` · next pass in ${gap} min` : " · last pass")
   );
 }
 
@@ -50,8 +67,12 @@ export default function App() {
   const live = useLiveEvents(); // GET /events: refreshes alerts and villages on every flag/alert event
 
   const [wind, setWind] = useState<WindInput>({ speedKmh: 30, fromDeg: 270 });
-  const [showTruth, setShowTruth] = useState(true);
-  const [startMode, setStartMode] = useState(false);
+  const [appMode, setAppMode] = useState<Mode>("replay");
+  const [layers, setLayers] = useState<LayerVisibility>(DEFAULT_LAYERS);
+  const [tab, setTab] = useState("villages");
+  const [scoreOpen, setScoreOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [demoStartedAt, setDemoStartedAt] = useState<string | null>(null);
   const [playing, setPlaying] = useState(false);
   const [info, setInfo] = useState("");
   const [busy, setBusy] = useState(false);
@@ -65,7 +86,6 @@ export default function App() {
   const [replay, setReplay] = useState<Replay | null>(null);
   const [pass, setPass] = useState(0);
   const [view, setView] = useState<MapView | null>(null);
-  const [showRisk, setShowRisk] = useState(false);
 
   // Ignore late /predict answers when a newer one was asked for (play, fast clicks).
   const predictSeq = useRef(0);
@@ -180,33 +200,77 @@ export default function App() {
   }, [playing, pass]);
 
   async function onMapClick(p: LatLon) {
-    if (!startMode) return;
-    setStartMode(false);
+    if (appMode !== "demo") return;
     setPlaying(false);
     setMode("start");
+    const t = new Date().toISOString();
     try {
-      await predict([p], new Date().toISOString(), null);
+      await predict([p], t, null);
+      setDemoStartedAt(t);
     } catch (e) {
       setInfo(errorText(e));
     }
   }
 
-  async function write(action: () => Promise<unknown>) {
+  // Clears the fire on screen (not on the server: alerts already sent stay sent).
+  function clearFire() {
+    predictSeq.current++;
+    setFireId(null);
+    setPrediction(null);
+    setBurning([]);
+    setDemoStartedAt(null);
+  }
+
+  function changeMode(m: Mode) {
+    if (m === appMode) return;
+    setPlaying(false);
+    setInfo("");
+    setAppMode(m);
+    if (m === "replay") {
+      if (replay) void showPass(replay, pass);
+      else if (fires.data?.[0]) void loadReplay(fires.data[0].fire_id);
+    } else {
+      setMode("start");
+      clearFire();
+      if (m === "live") setLayers((l) => ({ ...l, detections: true, history: true, risk: true }));
+    }
+  }
+
+  async function onSend(vs: Village[], level: SendLevel): Promise<boolean> {
     setBusy(true);
     try {
-      await action();
+      for (const v of vs) await api.sendAlert({ village_id: v.id, fire_id: fireId, level });
+      const phones = healthQ.data?.phones_connected;
+      toast.success(
+        `${statusWord(level).toUpperCase()} sent to ${vs.map((v) => v.name).join(", ")}` +
+          (phones != null ? ` · ${phones} ${phones === 1 ? "phone" : "phones"} connected` : ""),
+      );
       setInfo("");
+      return true;
     } catch (e) {
       setInfo(errorText(e));
+      return false;
     } finally {
       setBusy(false);
       await refresh();
     }
   }
 
-  const onSend = (v: Village) =>
-    write(() => api.sendAlert({ village_id: v.id, fire_id: fireId, level: "leave_now" }));
-  const onCancel = (alertId: string) => write(() => api.cancelAlert(alertId));
+  async function onCancel(ids: string[]): Promise<boolean> {
+    setBusy(true);
+    try {
+      for (const id of ids) await api.cancelAlert(id);
+      toast.success(`${ids.length} ${ids.length === 1 ? "alert" : "alerts"} cancelled · phones show CANCELLED`);
+      setInfo("");
+      return true;
+    } catch (e) {
+      setInfo(errorText(e));
+      return false;
+    } finally {
+      setBusy(false);
+      await refresh();
+    }
+  }
 
   async function onReset() {
     setPlaying(false);
@@ -216,93 +280,138 @@ export default function App() {
       setInfo(errorText(e));
       return;
     }
-    predictSeq.current++;
     void queryClient.invalidateQueries({ queryKey: RISK_KEY }); // brings today's preventive flags back
-    setFireId(null);
-    setPrediction(null);
-    setBurning([]);
+    clearFire();
     setMode("start"); // hides the "really burned" layer until a pass is shown again
     setInfo("");
     queryClient.removeQueries({ queryKey: ["villages"] });
     queryClient.removeQueries({ queryKey: ["alerts"] });
+    toast.success("Demo reset · every alert cleared");
   }
 
-  const truth = mode === "replay" && showTruth && replay ? (replay.passes[pass + 1]?.burning ?? []) : [];
+  const truth = mode === "replay" && replay ? (replay.passes[pass + 1]?.burning ?? []) : [];
   const passInfo = replay && mode === "replay" && prediction ? passInfoText(replay, pass) : "";
+  const demoInfo =
+    appMode === "demo" && prediction && demoStartedAt
+      ? `Started ${fmtClock(demoStartedAt)} by map click · weather: ${windSourceWord(prediction.wind_source)} · ` +
+        `model ${prediction.model}${prediction.embers_applied ? " · embers rule on" : ""} · click again to move it`
+      : "";
+  const burningAt = prediction ? fmtClock(mode === "replay" && replay ? replay.passes[pass].t : prediction.time) : null;
+  const setLayer = (k: LayerKey, v: boolean) => setLayers((l) => ({ ...l, [k]: v }));
+  const pending = healthQ.data?.pending_alerts ?? 0;
+  const focus = (lat: number, lon: number, zoom: number) =>
+    setView((v) => ({ center: [lat, lon], zoom, seq: (v?.seq ?? 0) + 1 }));
 
   return (
-    <div className="app">
+    <div className="flex h-dvh flex-col overflow-hidden">
       <Header
+        mode={appMode}
+        onMode={changeMode}
         prediction={prediction}
         health={{ data: healthQ.data, unreachable: healthQ.isError, updatedAt: healthQ.dataUpdatedAt }}
+        onScoreboard={() => setScoreOpen(true)}
+        onSettings={() => setSettingsOpen(true)}
       />
-      <main>
-        <FireMap
-          prediction={prediction}
-          burning={burning}
-          truth={truth}
-          villages={villages}
-          view={view}
-          startMode={startMode}
-          onMapClick={onMapClick}
-        >
-          {showRisk && riskQ.data && <RiskLayer risk={riskQ.data} />}
-          <LayersControl position="topright">
-            <FireLayers
+      <Controls
+        mode={appMode}
+        fires={fires.data ?? []}
+        fireId={selectedFire}
+        onSelectFire={loadReplay}
+        canPrev={canPrev}
+        canNext={canNext}
+        onPrev={() => replay && canPrev && showPass(replay, pass - 1)}
+        onNext={() => replay && canNext && showPass(replay, pass + 1)}
+        playing={playing}
+        onTogglePlay={() => setPlaying((x) => !x)}
+        passInfo={passInfo}
+        stub={!!replay?.stub}
+        demoInfo={demoInfo}
+        info={info || (fires.error ? errorText(fires.error) : "")}
+        wind={wind}
+        onWind={setWind}
+        onReset={onReset}
+      />
+      <main className="flex min-h-0 flex-1 flex-col-reverse lg:flex-row">
+        <aside className="flex min-h-0 flex-1 flex-col border-t bg-card lg:w-[440px] lg:flex-none lg:border-r lg:border-t-0">
+          <Tabs value={tab} onValueChange={setTab} className="flex min-h-0 flex-1 flex-col gap-0">
+            <TabsList className="mx-4 mt-3 grid w-auto grid-cols-3">
+              <TabsTrigger value="villages">Villages</TabsTrigger>
+              <TabsTrigger value="approval">
+                Approval
+                {pending > 0 && (
+                  <span className="rounded-full bg-fire px-1.5 font-mono text-[11px] text-white tabular-nums">{pending}</span>
+                )}
+              </TabsTrigger>
+              <TabsTrigger value="risk">Risk today</TabsTrigger>
+            </TabsList>
+            <TabsContent value="villages" className="flex min-h-0 flex-1 flex-col">
+              <VillageList
+                villages={villages}
+                alerts={alerts}
+                busy={busy}
+                onSend={onSend}
+                onCancel={onCancel}
+                onFocus={(v) => focus(v.lat, v.lon, 13)}
+              />
+              <AlertLog alerts={alerts} phones={healthQ.data?.phones_connected} />
+            </TabsContent>
+            <TabsContent value="approval" className="flex min-h-0 flex-1 flex-col">
+              <ApprovalQueue live={live.state} onSelect={(a) => focus(a.area.lat, a.area.lon, 13)} />
+            </TabsContent>
+            <TabsContent value="risk" className="flex min-h-0 flex-1 flex-col">
+              <RiskPanel
+                risk={riskQ.data}
+                error={riskQ.error ? errorText(riskQ.error) : ""}
+                show={layers.risk}
+                onShow={(v) => setLayer("risk", v)}
+                onSelect={(p) => {
+                  setLayer("risk", true);
+                  focus(p.lat, p.lon, 11);
+                }}
+              />
+            </TabsContent>
+          </Tabs>
+        </aside>
+        <div className="relative flex h-[55vh] shrink-0 flex-col lg:h-auto lg:min-w-0 lg:flex-1">
+          <Suspense
+            fallback={
+              <div className="grid flex-1 place-items-center bg-map-land font-mono text-xs text-muted-foreground">
+                Loading map…
+              </div>
+            }
+          >
+            <FireMap
+              prediction={prediction}
+              burning={burning}
+              truth={truth}
+              villages={villages}
+              alerts={alerts}
               detections={fireData.detections.data}
               history={fireData.history.data}
-              suppressClick={startMode}
-            />
-          </LayersControl>
-        </FireMap>
-        <aside>
-          <FireLegend
-            detections={fireData.detections.data}
-            history={fireData.history.data}
-            error={fireData.detections.error || fireData.history.error ? "Could not load the fire map data." : ""}
-          />
-          <Controls
-            fires={fires.data ?? []}
-            fireId={selectedFire}
-            onSelectFire={loadReplay}
-            canPrev={canPrev}
-            canNext={canNext}
-            onPrev={() => replay && canPrev && showPass(replay, pass - 1)}
-            onNext={() => replay && canNext && showPass(replay, pass + 1)}
-            playing={playing}
-            onTogglePlay={() => setPlaying((x) => !x)}
-            passInfo={passInfo}
-            info={info || (fires.error ? errorText(fires.error) : "")}
-            startMode={startMode}
-            onToggleStartMode={() => setStartMode((x) => !x)}
-            wind={wind}
-            onWind={setWind}
-            showTruth={showTruth}
-            onShowTruth={setShowTruth}
-            onReset={onReset}
-          />
-          <RiskPanel
-            risk={riskQ.data}
-            error={riskQ.error ? errorText(riskQ.error) : ""}
-            show={showRisk}
-            onShow={setShowRisk}
-            onSelect={(p) => {
-              setShowRisk(true);
-              setView((v) => ({ center: [p.lat, p.lon], zoom: 11, seq: (v?.seq ?? 0) + 1 }));
-            }}
-          />
-          <ApprovalQueue
-            live={live.state}
-            fireId={fireId}
-            villages={villages}
-            onSelect={(a) => setView((v) => ({ center: [a.area.lat, a.area.lon], zoom: 13, seq: (v?.seq ?? 0) + 1 }))}
-          />
-          <VillageList villages={villages} busy={busy} onSend={onSend} onCancel={onCancel} />
-          <AlertLog alerts={alerts} />
-          <Scoreboard />
-          <Settings />
-        </aside>
+              risk={riskQ.data}
+              layers={layers}
+              view={view}
+              demo={appMode === "demo"}
+              onMapClick={onMapClick}
+            >
+              <LayersCard
+                layers={layers}
+                onChange={setLayer}
+                burningAt={burningAt}
+                replay={mode === "replay" && replay != null}
+                detections={fireData.detections.data}
+                history={fireData.history.data}
+                risk={riskQ.data}
+              />
+              <WeatherCard prediction={prediction} />
+              <DemoHint demo={appMode === "demo"} />
+            </FireMap>
+          </Suspense>
+        </div>
       </main>
+      <Scoreboard open={scoreOpen} onOpenChange={setScoreOpen} />
+      <Settings open={settingsOpen} onOpenChange={setSettingsOpen} />
+      <Toaster />
     </div>
   );
 }

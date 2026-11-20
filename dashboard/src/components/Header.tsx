@@ -1,5 +1,16 @@
+// App header (DESIGN.md §8): brand, mode switch, status chips, scoreboard and settings.
+// Data age is always visible; it turns into a fire banner past 3 h (§1.3). Server down is a banner too.
+import { ArrowsClockwise, Broadcast, ChartBar, Clock, Cpu, DeviceMobile, GearSix, Warning, Wind } from "@phosphor-icons/react";
+import type { ReactNode } from "react";
 import type { Health, PredictResponse } from "../api/client";
-import { fmtAge, fmtClock, fmtWind, windSourceWord } from "../format";
+import { brand } from "../config/brand";
+import { fmtClock } from "../format";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { cn } from "@/lib/utils";
+
+export type Mode = "replay" | "live" | "demo";
 
 export interface HealthState {
   data: Health | undefined; // last known values, kept while the server is unreachable
@@ -7,50 +18,133 @@ export interface HealthState {
   updatedAt: number; // ms since epoch of the last successful /health, 0 if never
 }
 
-const count = (n: number | undefined, one: string, many: string): string =>
-  n == null ? `— ${many}` : `${n} ${n === 1 ? one : many}`;
-
-function serverText(h: HealthState): string {
-  if (h.unreachable) {
-    return h.updatedAt ? `Server unreachable · last seen ${fmtClock(h.updatedAt)}` : "Server unreachable";
-  }
-  return h.data ? "Server connected" : "Connecting to server…";
+function Chip({ icon, dot, tone, children, title }: { icon?: ReactNode; dot?: "ok" | "fire"; tone?: "fire"; children: ReactNode; title?: string }) {
+  return (
+    <Badge
+      variant="outline"
+      title={title}
+      className={cn(
+        "h-8 gap-1.5 rounded-lg bg-secondary/70 px-2.5 text-[13px] font-semibold tabular-nums text-ink [&>svg]:size-4",
+        tone === "fire" && "border-fire/40 bg-fire/10 text-fire-text",
+      )}
+    >
+      {dot && <span className={cn("size-2 rounded-full", dot === "ok" ? "bg-ok" : "bg-fire")} aria-hidden="true" />}
+      {icon}
+      {children}
+    </Badge>
+  );
 }
 
-export function Header({ prediction, health }: { prediction: PredictResponse | null; health: HealthState }) {
-  const p = prediction;
+const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+
+function ageText(min: number | null | undefined): string {
+  if (min == null) return "No pass yet";
+  return min < 60 ? `Pass ${min} min ago` : `Pass ${Math.floor(min / 60)} h ${min % 60} min ago`;
+}
+
+interface Props {
+  mode: Mode;
+  onMode: (m: Mode) => void;
+  prediction: PredictResponse | null;
+  health: HealthState;
+  onScoreboard: () => void;
+  onSettings: () => void;
+}
+
+export function Header({ mode, onMode, prediction: p, health, onScoreboard, onSettings }: Props) {
   const h = health.data;
+  const phones = h?.phones_connected;
   return (
     <>
-      <header>
-        <strong>Wildfire early warning · northern Algeria</strong>
-        <span className="age">{fmtAge(p?.data_age_min)}</span>
-      </header>
-      <div className="statusbar">
-        <span role="status" className={health.unreachable ? "server down" : "server"}>
-          {serverText(health)}
-        </span>
-        <span className={health.unreachable ? "counts greyed" : "counts"}>
-          <span>{count(h?.phones_connected, "phone connected", "phones connected")}</span>
-          <span>{count(h?.dashboards_connected, "dashboard connected", "dashboards connected")}</span>
-          <span>{count(h?.pending_alerts, "pending alert", "pending alerts")}</span>
-        </span>
-        {p && (
-          <>
-            <span title={p.fallback_reason ?? undefined}>
+      <header className="flex h-[60px] shrink-0 items-center gap-4 border-b bg-card px-4">
+        <div className="flex items-center gap-2.5">
+          <img src={`${import.meta.env.BASE_URL}logo.png`} alt="" width={20} height={28} className="h-7 w-auto" />
+          <span className="font-display text-[21px] font-extrabold tracking-[-0.03em]">{brand.name}</span>
+          <span className="status-word rounded-[5px] bg-ink px-1.5 py-0.5 text-white">Ops</span>
+        </div>
+        <div className="h-7 w-px bg-border" aria-hidden="true" />
+        <ToggleGroup
+          type="single"
+          value={mode}
+          onValueChange={(v) => v && onMode(v as Mode)}
+          aria-label="Mode"
+          className="rounded-[10px] border bg-secondary/60 p-0.5"
+        >
+          {(
+            [
+              ["replay", "Replay"],
+              ["live", "Live"],
+              ["demo", "Demo"],
+            ] as const
+          ).map(([v, label]) => (
+            <ToggleGroupItem
+              key={v}
+              value={v}
+              className={cn(
+                "h-8 rounded-lg! px-4 text-[13px] font-semibold text-muted-foreground",
+                "data-[state=on]:text-white data-[state=on]:shadow-1",
+                v === "demo" ? "data-[state=on]:bg-fire" : "data-[state=on]:bg-ink",
+              )}
+            >
+              {v === "demo" && <Broadcast weight="bold" aria-hidden="true" />}
+              {label}
+            </ToggleGroupItem>
+          ))}
+        </ToggleGroup>
+
+        <div className="ml-auto flex flex-wrap items-center justify-end gap-2" role="status" aria-live="polite">
+          {health.unreachable ? (
+            <Chip dot="fire" tone="fire">
+              Server unreachable
+            </Chip>
+          ) : (
+            <Chip dot={h ? "ok" : undefined}>{h ? "Connected" : "Connecting…"}</Chip>
+          )}
+          {p && (
+            <Chip
+              icon={<Cpu aria-hidden="true" />}
+              title={p.fallback_reason ? `Fallback: ${p.fallback_reason}` : undefined}
+              tone={p.fallback_reason ? "fire" : undefined}
+            >
               Model {p.model}
-              {p.fallback_reason ? ` (fallback: ${p.fallback_reason})` : ""}
-              {p.embers_applied ? " · embers rule" : ""}
-            </span>
-            <span>
-              Wind {fmtWind(p.wind)} ({windSourceWord(p.wind_source)})
-            </span>
-          </>
-        )}
-      </div>
+              {p.fallback_reason ? " · fallback" : " · auto"}
+            </Chip>
+          )}
+          <Chip icon={<Clock aria-hidden="true" />} tone={p?.data_stale ? "fire" : undefined}>
+            {ageText(p?.data_age_min)}
+          </Chip>
+          {p && (
+            <Chip icon={<Wind aria-hidden="true" />}>
+              {Math.round(p.wind.speed_kmh)} km/h · {Math.round(p.wind.from_deg)}°
+            </Chip>
+          )}
+          <Chip icon={<DeviceMobile aria-hidden="true" />} tone={phones === 0 ? "fire" : undefined}>
+            {phones == null ? "— receivers" : plural(phones, "receiver", "receivers")}
+          </Chip>
+          {h != null && h.pending_alerts > 0 && (
+            <Chip icon={<ArrowsClockwise aria-hidden="true" />}>{plural(h.pending_alerts, "pending", "pending")}</Chip>
+          )}
+          <Button variant="ghost" size="sm" onClick={onScoreboard}>
+            <ChartBar weight="bold" aria-hidden="true" />
+            Scoreboard
+          </Button>
+          <Button variant="ghost" size="icon-sm" onClick={onSettings} aria-label="Settings">
+            <GearSix weight="bold" />
+          </Button>
+        </div>
+      </header>
+
+      {health.unreachable && (
+        <div className="flex items-center gap-2 bg-fire px-4 py-2 text-sm font-semibold text-white" role="alert">
+          <Warning weight="bold" aria-hidden="true" />
+          Not connected to the server{health.updatedAt ? ` · last seen ${fmtClock(health.updatedAt)}` : ""}. Numbers
+          below may be out of date.
+        </div>
+      )}
       {p?.data_stale && (
-        <div className="stale" role="alert">
-          Newest satellite data is more than 3 h old. Zones may be out of date.
+        <div className="flex items-center gap-2 bg-fire px-4 py-2 text-sm font-semibold text-white" role="alert">
+          <Warning weight="bold" aria-hidden="true" />
+          Newest satellite pass is more than 3 h old. Zones may be out of date.
         </div>
       )}
     </>

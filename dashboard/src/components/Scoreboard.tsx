@@ -1,12 +1,11 @@
 // Scoreboard (#21): models x held-out fires from GET /scoreboard, plus the
 // "warned X before vs old method" counter for the replay fire. Every number
-// comes from the JSON; null or missing shows "not measured". Plain styling
-// until the design mockups (#8, PROGRESS D-11).
+// comes from the JSON; null or missing shows "not measured" (DESIGN.md §1.6, honest numbers).
 import { useQuery } from "@tanstack/react-query";
-import { useRef } from "react";
 import type { Metric, ModelScore, ReplayCounter, Scoreboard as Board } from "../api/scoreboard";
 import { fetchScoreboard } from "../api/scoreboard";
-import "./Scoreboard.css";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 const NOT_MEASURED = "not measured";
 
@@ -39,7 +38,7 @@ const COLUMNS: { key: keyof ModelScore; label: string; title: string; fmt: (v: n
 ];
 
 function cell(v: ModelScore[keyof ModelScore], fmt: (v: number) => string) {
-  return typeof v === "number" && Number.isFinite(v) ? fmt(v) : <span className="sb-nm">{NOT_MEASURED}</span>;
+  return typeof v === "number" && Number.isFinite(v) ? fmt(v) : <span className="text-xs font-normal italic text-muted-foreground">{NOT_MEASURED}</span>;
 }
 
 const measured = (v: Metric | undefined): v is number => typeof v === "number" && Number.isFinite(v);
@@ -51,15 +50,41 @@ function counterText(c: ReplayCounter | null | undefined): string | null {
 }
 
 function Counter({ board }: { board: Board }) {
-  const text = counterText(board.replay_counter);
+  const c = board.replay_counter;
+  const text = counterText(c);
+  if (!text || !c || !measured(c.lead_min) || !measured(c.old_method_lead_min)) {
+    return (
+      <div className="rounded-2xl border bg-card p-5" aria-live="polite">
+        <p className="label-mono">Warned before vs old method</p>
+        <p className="mt-2 font-display text-[44px] font-extrabold leading-none tracking-[-0.03em] text-safe">{NOT_MEASURED}</p>
+      </div>
+    );
+  }
+  const extra = c.lead_min - c.old_method_lead_min;
   return (
-    <p className="sb-counter" aria-live="polite">
-      {text ?? (
-        <>
-          Warned before vs old method: <span className="sb-nm">{NOT_MEASURED}</span>
-        </>
-      )}
-    </p>
+    <div className="grid gap-6 rounded-2xl border bg-card p-5 sm:grid-cols-3" aria-live="polite" aria-label={text}>
+      <div>
+        <p className="label-mono">
+          {c.village} · warned{c.model ? ` · model ${c.model}` : ""}
+        </p>
+        <p className="mt-2 font-display text-[54px] font-extrabold leading-none tracking-[-0.04em] text-fire tabular-nums">
+          {fmtLead(c.lead_min)}
+        </p>
+      </div>
+      <div>
+        <p className="label-mono">{c.old_method || "old method"}</p>
+        <p className="mt-2 font-display text-[54px] font-extrabold leading-none tracking-[-0.04em] text-safe tabular-nums">
+          {fmtLead(c.old_method_lead_min)}
+        </p>
+      </div>
+      <div className="self-center">
+        <p className="label-mono">Extra time to leave</p>
+        <p className="mt-2 font-display text-[30px] font-extrabold leading-none tracking-[-0.03em] tabular-nums">
+          {extra >= 0 ? "+" : "−"}
+          {fmtLead(Math.abs(extra))}
+        </p>
+      </div>
+    </div>
   );
 }
 
@@ -67,93 +92,96 @@ function Tables({ board }: { board: Board }) {
   const fires = board.fires ?? [];
   return (
     <>
-      {board.horizon && <p className="small">Horizon: {board.horizon}</p>}
-      {fires.length === 0 && <p className="sb-nm">No held-out fire {NOT_MEASURED} yet.</p>}
+      {board.horizon && <p className="text-sm text-muted-foreground">Horizon: {board.horizon}</p>}
+      {fires.length === 0 && <p className="text-sm italic text-muted-foreground">No held-out fire {NOT_MEASURED} yet.</p>}
       {fires.map((f) => {
         const models = Object.entries(f.models ?? {});
         return (
-          <section key={f.holdout} className="sb-holdout">
-            <h4>
-              {f.name ?? f.holdout}{" "}
-              <span className="small">
-                {measured(f.n_fires) ? `${f.n_fires} fire${f.n_fires === 1 ? "" : "s"}` : `fires: ${NOT_MEASURED}`}
-              </span>
-            </h4>
-            {f.status && <p className="small">{f.status}</p>}
+          <section key={f.holdout} className="mt-2">
+            <p className="label-mono">
+              {f.name ?? f.holdout} ·{" "}
+              {measured(f.n_fires) ? `${f.n_fires} fire${f.n_fires === 1 ? "" : "s"}` : `fires: ${NOT_MEASURED}`}
+            </p>
+            {f.status && <p className="mt-1 text-sm text-muted-foreground">{f.status}</p>}
             {models.length === 0 ? (
-              <p className="sb-nm">{NOT_MEASURED}</p>
+              <p className="mt-2 text-sm italic text-muted-foreground">{NOT_MEASURED}</p>
             ) : (
-              <div className="sb-scroll">
-                <table className="sb-table">
-                  <thead>
-                    <tr>
-                      <th scope="col">Model</th>
+              <div className="mt-2 overflow-x-auto rounded-2xl border bg-card">
+                <Table className="min-w-[860px]">
+                  <TableHeader>
+                    <TableRow className="bg-secondary/40">
+                      <TableHead className="label-mono h-11 pl-5 text-ink">Model</TableHead>
                       {COLUMNS.map((c) => (
-                        <th key={c.key} scope="col" title={c.title}>
+                        <TableHead key={c.key} title={c.title} className="label-mono h-11 text-right text-ink">
                           {c.label}
-                        </th>
+                        </TableHead>
                       ))}
-                    </tr>
-                  </thead>
-                  <tbody>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
                     {models.map(([k, m]) => (
-                      <tr key={k}>
-                        <th scope="row">{modelName(k)}</th>
+                      <TableRow key={k}>
+                        <TableHead scope="row" className="pl-5 text-[15px] font-semibold text-ink">
+                          {modelName(k)}
+                        </TableHead>
                         {COLUMNS.map((c) => (
-                          <td key={c.key}>{cell(m[c.key], c.fmt)}</td>
+                          <TableCell key={c.key} className="text-right text-[15px] font-semibold tabular-nums">
+                            {cell(m[c.key], c.fmt)}
+                          </TableCell>
                         ))}
-                      </tr>
+                      </TableRow>
                     ))}
-                  </tbody>
-                </table>
+                  </TableBody>
+                </Table>
               </div>
             )}
           </section>
         );
       })}
       {board.ship_c && (
-        <p className="small">
-          Ship C? {board.ship_c.decision ?? NOT_MEASURED}
+        <p className="text-sm text-muted-foreground">
+          Ship C? <span className="font-semibold text-ink">{board.ship_c.decision ?? NOT_MEASURED}</span>
           {board.ship_c.rule ? ` (${board.ship_c.rule})` : ""}
         </p>
       )}
-      {board.generated_at && <p className="small">Generated {new Date(board.generated_at).toUTCString()}</p>}
+      {board.generated_at && (
+        <p className="font-mono text-xs text-muted-foreground">Generated {new Date(board.generated_at).toUTCString()}</p>
+      )}
     </>
   );
 }
 
-export function Scoreboard() {
+export function Scoreboard({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
   const q = useQuery({ queryKey: ["scoreboard"], queryFn: fetchScoreboard, staleTime: 60_000 });
-  const dialog = useRef<HTMLDialogElement>(null);
   const board = q.data;
-
   return (
-    <section className="sb">
-      <h3>Scoreboard</h3>
-      {q.isPending && <p className="small">Loading…</p>}
-      {q.isError && <p className="error">Scoreboard unavailable: {q.error.message}</p>}
-      {board && (
-        <>
-          {board.stub && <p className="sb-stub">STUB: no evaluation has run yet (model/artifacts/scoreboard.json missing).</p>}
-          <Counter board={board} />
-          {board.weather_note && <p className="sb-weather">{board.weather_note}</p>}
-          <button type="button" onClick={() => dialog.current?.showModal()}>
-            Open scoreboard table
-          </button>
-          <dialog ref={dialog} className="sb-dialog" aria-labelledby="sb-title" onClick={(e) => e.target === dialog.current && dialog.current.close()}>
-            <div className="sb-dialog-head">
-              <h3 id="sb-title">Scoreboard: models on held-out fires</h3>
-              <button type="button" className="ghost" onClick={() => dialog.current?.close()}>
-                Close
-              </button>
-            </div>
-            {board.stub && <p className="sb-stub">STUB: no evaluation has run yet. Every metric is {NOT_MEASURED}.</p>}
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-h-[calc(100vh-32px)] overflow-y-auto bg-background sm:max-w-[1040px]">
+        <DialogHeader>
+          <p className="label-mono">Scoreboard · held-out fires only</p>
+          <DialogTitle className="font-display text-[44px] font-extrabold leading-[1.05] tracking-[-0.03em]">
+            Did every village get its warning in time?
+          </DialogTitle>
+          <DialogDescription className="text-base">
+            Every number is read from scoreboard.json, written by the evaluation script. Only whole fire episodes
+            the model never trained on count.
+          </DialogDescription>
+        </DialogHeader>
+        {q.isPending && <p className="text-sm text-muted-foreground">Loading…</p>}
+        {q.isError && <p className="text-sm font-semibold text-fire-text">Scoreboard unavailable: {q.error.message}</p>}
+        {board && (
+          <div className="flex flex-col gap-5">
+            {board.stub && (
+              <p className="w-fit rounded-full border border-dashed border-flame px-3 py-1 text-xs font-semibold text-flame-text">
+                No evaluation has run yet (model/artifacts/scoreboard.json missing): every metric is {NOT_MEASURED}.
+              </p>
+            )}
             <Counter board={board} />
-            {board.weather_note && <p className="sb-weather">{board.weather_note}</p>}
+            {board.weather_note && <p className="text-sm text-muted-foreground">{board.weather_note}</p>}
             <Tables board={board} />
-          </dialog>
-        </>
-      )}
-    </section>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }
