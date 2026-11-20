@@ -4,7 +4,7 @@ export
 PY ?= .venv/bin/python
 PORT ?= 8000
 
-.PHONY: help setup dev api dashboard-dev dashboard-build test lint fmt check-columns train train-dza evaluate export model data lan-ip docker-up docker-down docker-logs
+.PHONY: help setup dev api dashboard-dev dashboard-build test lint fmt check-columns train train-dza evaluate export model data lan-ip demo-check docker-up docker-down docker-logs
 
 help:            ## list targets
 	@grep -E '^[a-z-]+:.*##' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-14s %s\n", $$1, $$2}'
@@ -70,3 +70,6 @@ docker-logs:     ## follow the API container logs
 
 lan-ip:          ## the address test phones should open
 	@echo "phones: http://$$(hostname -I 2>/dev/null | awk '{print $$1}' || ipconfig getifaddr en0):$(PORT)/alert/"
+
+demo-check:      ## issue #16: 5 timed runs, AI flag → approve → phone stream (API must be running)
+	.venv/bin/python scripts/demo_check.py --base http://localhost:$(PORT)
