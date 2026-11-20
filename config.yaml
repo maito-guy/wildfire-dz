@@ -98,4 +98,4 @@ forecast:                                  # Open-Meteo wind for /predict when t
   archive_url: https://archive-api.open-meteo.com/v1/archive   # ERA5, for times older than past_days
   timeout_s: 3
   cache_min: 15
-  past_days: 2                             # times newer than now - past_days use the forecast API
+  past_days: 10                            # times newer than now - past_days use the forecast API (the ERA5 archive lags ~5 days)
