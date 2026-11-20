@@ -12,8 +12,8 @@ entries short and factual. Use absolute dates (YYYY-MM-DD).
 ## 1. Current state
 
 - **Phase:** delivery (`RULES.md`, `PROJECT_MANAGEMENT_RULES.md` §9–13). Spec: `SPEC.md` v0.3.1.
-- **Running:** agents on #32 (React dashboard, worktree `.claude/worktrees/32`) and #26 (CAP, worktree `.claude/worktrees/26`). Merged into dev: #14 (PR #35), #24 (PR #36).
-- **Next up:** review and merge wave 1 PRs into `dev`, then wave 2 from the newly unblocked issues (#25, #26, #10).
+- **Running:** wave 2: agents on #39 Turborepo, #15 status bar, #25 approval queue UI, #10 phone page (worktrees `.claude/worktrees/{39,15,25,10}`). Next: #40 Docker after #39.
+- **Next up:** merge #39, run #40. Then #15 (dashboard status bar) and #25/#10 once design #8 lands.
 - **Blockers:** data issues #4 #5 #6 #17 need the Algeria Fire Map export and a laptop run (Electronics); #8 #11 need humans (design, translations).
 
 ---
@@ -27,13 +27,15 @@ entries short and factual. Use absolute dates (YYYY-MM-DD).
 | C-03 | Labels: exactly one of `phase 1`, `phase 2`, `phase 3`, plus `frontend` or `backend`. No type, priority or status labels | D-05 |
 | C-04 | Issue body sections: Owner · Why · User flow · What to build (In/Out) · Where · Done when · How to test · Depends on. Dependencies are real GitHub blocked-by links (REST API, because gh 2.45 has no `--blocked-by`) | D-05 |
 | C-05 | Python 3.11. Setup: `uv venv -p 3.11 .venv && uv pip install -p .venv -r requirements-dev.txt` (or `make setup`). Checks: `.venv/bin/ruff check .` and `.venv/bin/python -m pytest -q`. In a worktree, use the main checkout's venv: `/home/malikou/Algeria2.0/wildfire-dz/.venv/bin/...` | scaffold |
-| C-06 | Dashboard: React + TypeScript + Vite in `dashboard/`. Checks: `npm ci`, `npm run typecheck`, `npm run lint`, `npm run build`. FastAPI serves `dashboard/dist/` at `/dashboard/` | SPEC §3.1 |
+| C-06 | Dashboard: React + TypeScript + Vite in `dashboard/`. Checks: `npm ci`, `npm run typecheck`, `npm run lint`, `npm run build`. FastAPI serves `dashboard/dist/` at `/dashboard/` only once built (nothing is mounted otherwise; tests expect 404 then). Regenerate `src/api/schema.ts` with `npm run gen:api` (API running) whenever `api/schemas.py` or the endpoints change, and commit it. TypeScript is pinned to ~5.9 (typescript-eslint and openapi-typescript don't support TypeScript 7). Node ≥ 22.12 | SPEC §3.1, #38 |
 | C-07 | Every threshold and path goes in `config.yaml`, never in code. `docs/contracts.md` and `api/schemas.py` change together, with a team-chat note | scaffold README |
 | C-08 | SSE, not WebSocket: `/alerts/stream` (phones: sent alerts only) and `/events` (dashboard). Write endpoints take an `X-Operator-Token` header | SPEC §2, wave 1 seams |
 | C-09 | CI workflow name is `ci`. Merge with `scripts/merge-pr.sh -w ci <pr>...` | kit |
 | C-10 | Tests never call the real network; mock HTTP with `httpx.MockTransport` or monkeypatch. `api/tests/conftest.py` makes every Open-Meteo call fail offline; to test a real lookup, pass `client=` to `weather.get_wind` | RULES §7.2, #35 |
 | C-11 | Alert lifecycle `pending → sent \| rejected`, then `sent → cancelled`. Only `sent` alerts and cancels reach `/alerts/stream` (public). The dashboard follows `/events` | #36 |
 | C-12 | `AlertStore.flag(fire_id, v, level, source, scenario_time, data_age_min)` is the single entry point for AI flags. Risk flags (#28) use `source="ai_risk"`, `level="preventive"` | #36 |
+| C-14 | Dashboard write calls send `X-Operator-Token` from `localStorage["operatorToken"]` (Settings panel) | #38 |
+| C-15 | CAP settings live in `config.yaml → cap`. The demo uses status `Exercise`; `Actual` only for a real deployment. CAP is built with the stdlib; `lxml` is test-only (XSD in `api/tests/data/`). A Cancel has its own identifier `<prefix>.<id>.cancel` and `references` the original. A CAP failure is logged and never blocks the phones | #37 |
 | C-13 | `/predict` wind: request → Open-Meteo forecast (within `forecast.past_days` = 10 days) → ERA5 archive (older) → `weather_default`. Cached per (lat, lon, hour) for 15 min; failures are not cached | #35 |
 
 ---
@@ -53,6 +55,7 @@ entries short and factual. Use absolute dates (YYYY-MM-DD).
 | D-07 | 2026-11-20 | Product pivot (spec v0.3): no mobile app. Dashboard + AI flags + operator approval + simulated cell broadcast (CAP) + risk map; planting demo in phase 3. Closed #2 #3 #13 #23 | Owner |
 | D-08 | 2026-11-20 | Dashboard in React + TypeScript, with FastAPI integrating the AI (spec v0.3.1) | Owner |
 | D-10 | 2026-11-20 | A manual `POST /alerts` is sent at once (the operator's click is the approval). Cancel applies only to sent alerts; a pending flag is rejected instead. The audit log records when, not who (one shared token) | #36 |
+| D-11 | 2026-11-20 | #25 (approval queue) and #10 (phone page) start before the design mockups (#8): built from SPEC §6 with plain styling, restyled later | Owner, to get flag → approve → phone working sooner |
 | D-09 | 2026-11-20 | If `OPERATOR_TOKEN` is unset, write endpoints stay open and log a warning (dev mode). If it is set, the header is required (401 otherwise). The demo sets it | Wave 1 seam, coordinator default |
 
 ### 3.2 Open (waiting on the owner)
@@ -68,7 +71,8 @@ entries short and factual. Use absolute dates (YYYY-MM-DD).
 
 ## 4. Tasks waiting to be done
 
-1. [ ] Wave 1 (agents): #32 React dashboard, #24 approval API, #14 forecast wind.
+1. [x] Wave 1: #14, #24, #26, #32 merged into dev.
+1. [ ] #39 Turborepo (agent), then #40 Docker.
 2. [ ] Wave 2 candidates once wave 1 merges: #26 CAP (after #24), #25 approval queue UI (after #24, #32, #8), #10 phone page (after #24, #8).
 3. [ ] Human / data track: #4 #5 #6 #17 (Electronics), #7 #19 #27 (AI), #8 (UI/UX), #11 (Commerce).
 
@@ -76,6 +80,7 @@ entries short and factual. Use absolute dates (YYYY-MM-DD).
 
 ## 5. Milestone log
 
+- 2026-11-20: Wave 1 done: #26 CAP (PR #37) and #32 React dashboard (PR #38) merged. Created #39 Turborepo and #40 Docker (owner request).
 - 2026-11-20: #14 forecast wind (PR #35) and #24 approval API (PR #36) merged into dev.
 - 2026-11-20: Kit adopted; issues #1–#33 created; spec v0.3.1; delivery started with wave 1.
 
@@ -102,6 +107,8 @@ _None yet._
 - The owner's token lacks the `project` scope (no board, by D-04).
 - No `python3.11` on the owner's laptop, so `make setup` fails. Use uv (C-05).
 - Open-Meteo: the forecast API returns `hourly.time` as `YYYY-MM-DDTHH:MM` UTC, plus parallel value arrays (checked live). The ERA5 archive lags about 5 days and was not checked live. When offline, each `/predict` without wind can wait up to the 3 s timeout.
+- Never `pkill -f <pattern>` from a shell whose own command line contains the pattern: it kills that shell (exit 144). Kill by PID.
+- On the stub grid, village labels overlap on the map (the design issue #8 may change them).
 - The network drops sometimes. Retry `git push` and `gh` calls that fail with "no route to host" or "unexpected disconnect".
 - CI runs on `pull_request` (any base) and on push to `main` only, not on push to `dev`.
 - `scripts/merge-pr.sh` needs `gh pr update-branch`, which gh 2.45 lacks. Manual sequence: check the PR is based on the latest `origin/dev` (else merge `origin/dev` into the branch and push), wait for the `ci` run on the head SHA (`gh run list --workflow ci --commit <sha>`, then `gh run watch`), then `gh pr merge <n> --squash --subject "<title> (#<n>)" --body ""`.
