@@ -4,7 +4,7 @@ export
 PY ?= .venv/bin/python
 PORT ?= 8000
 
-.PHONY: help setup dev api dashboard-dev dashboard-build test lint fmt check-columns train train-dza evaluate export model data lan-ip
+.PHONY: help setup dev api dashboard-dev dashboard-build test lint fmt check-columns train train-dza evaluate export model data lan-ip docker-up docker-down docker-logs
 
 help:            ## list targets
 	@grep -E '^[a-z-]+:.*##' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-14s %s\n", $$1, $$2}'
@@ -57,6 +57,16 @@ model: train train-dza evaluate   ## full model loop
 data:            ## run the firedata pipeline (laptop only; see data/README.md)
 	cd data && ../$(PY) 01_download_firms.py && ../$(PY) 02_clean.py --export detections.csv \
 	  && ../$(PY) 03_weather.py && ../$(PY) 04_terrain_fuel.py && ../$(PY) 05_build_table.py
+
+docker-up:       ## build and start the whole demo in Docker (API + dashboard + phone page) on :$(PORT)
+	@mkdir -p data/out model/artifacts
+	docker compose up -d --build
+
+docker-down:     ## stop and remove the demo container
+	docker compose down
+
+docker-logs:     ## follow the API container logs
+	docker compose logs -f api
 
 lan-ip:          ## the address test phones should open
 	@echo "phones: http://$$(hostname -I 2>/dev/null | awk '{print $$1}' || ipconfig getifaddr en0):$(PORT)/alert/"
