@@ -70,7 +70,7 @@ function isAlert(d: unknown): d is Alert {
 /**
  * The dashboard's live updates from GET /events. Each alert event updates the
  * approval queue at once from the event data, then refreshes the alert and
- * village queries (batched).
+ * village queries and the status bar health (batched).
  */
 export function useLiveEvents(): { connected: boolean; state: StreamState } {
   const queryClient = useQueryClient();
@@ -91,6 +91,7 @@ export function useLiveEvents(): { connected: boolean; state: StreamState } {
       timer.current = undefined;
       void queryClient.invalidateQueries({ queryKey: ["alerts"] });
       void queryClient.invalidateQueries({ queryKey: ["villages"] });
+      void queryClient.invalidateQueries({ queryKey: ["health"] }); // pending count in the status bar
     }, BATCH_MS);
   };
 
