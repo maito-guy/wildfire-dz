@@ -132,6 +132,19 @@ export function history(r: HistoryResponse | undefined): FeatureCollection<Polyg
   );
 }
 
+/** Fire history as centre points for the heatmap; `weight` is 0–1 on a log scale of the count. */
+export function historyPoints(r: HistoryResponse | undefined): FeatureCollection<Point> {
+  if (!r) return fc([]);
+  const max = Math.log1p(Math.max(1, r.max_count));
+  return fc(
+    r.cells.map((c) => ({
+      type: "Feature",
+      properties: { weight: Math.log1p(c.count) / max },
+      geometry: { type: "Point", coordinates: [c.lon, c.lat] },
+    })),
+  );
+}
+
 /** Today's risk cells (square in lat/lon, as the API defines them). */
 export function riskCells(r: RiskResponse | undefined): FeatureCollection<Polygon> {
   if (!r) return fc([]);

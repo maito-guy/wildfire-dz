@@ -12,14 +12,6 @@ const WORDS: Record<Status, string> = {
 
 export const statusWord = (s: Status): string => WORDS[s];
 
-export const STATUS_COLOR: Record<Status, string> = {
-  leave_now: "#b00020",
-  get_ready: "#e07000",
-  safe: "#2e7d32",
-  update: "#1565c0",
-  preventive: "#6a1b9a",
-};
-
 export function fmtAge(min: number | null | undefined): string {
   if (min == null) return "no data yet";
   return min < 60
@@ -58,10 +50,6 @@ const WIND_SOURCE: Record<PredictResponse["wind_source"], string> = {
 };
 
 export const windSourceWord = (s: PredictResponse["wind_source"]): string => WIND_SOURCE[s];
-
-export function fmtWind(w: PredictResponse["wind"]): string {
-  return `${Math.round(w.speed_kmh)} km/h from ${Math.round(w.from_deg)}°`;
-}
 
 // Local wall-clock time, 24 h, e.g. "14:05".
 export const fmtClock = (t: string | number): string =>

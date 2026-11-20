@@ -1,10 +1,9 @@
-// Toasts (DESIGN.md §8): ink background, green check, top-centre. Light theme only (DESIGN.md §3.1).
+// Toasts (DESIGN.md §8): strongest-contrast background, green check, top-centre. Follows the theme.
 import { CheckCircle, Info, SpinnerGap, Warning, XCircle } from "@phosphor-icons/react"
 import { Toaster as Sonner, type ToasterProps } from "sonner"
 
 const Toaster = (props: ToasterProps) => (
   <Sonner
-    theme="light"
     position="top-center"
     className="toaster group"
     icons={{
@@ -16,8 +15,8 @@ const Toaster = (props: ToasterProps) => (
     }}
     toastOptions={{
       classNames: {
-        toast: "!bg-ink !text-white !border-0 !shadow-toast font-sans text-sm font-semibold",
-        description: "!text-white/70",
+        toast: "!bg-primary !text-primary-foreground !border-0 !shadow-toast font-sans text-sm font-semibold",
+        description: "!text-primary-foreground/70",
       },
     }}
     {...props}

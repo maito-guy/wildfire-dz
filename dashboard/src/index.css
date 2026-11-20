@@ -1,7 +1,10 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
-/* Hariq design system (docs/DESIGN.md). Light theme only for v1 (§3.1). */
+/* Hareeq design system. Light theme = DESIGN1 (paper, ink, fire), dark theme = DESIGN2 (dark glass).
+   The theme is the `.dark` class on <html> (src/lib/theme.ts). Status colours (fire, flame) are the same
+   in both; only text variants get lighter on dark so they keep their contrast. */
+@custom-variant dark (&:where(.dark, .dark *));
 
 :root {
   --radius: 0.75rem; /* lg 12px · md 10px (buttons) · sm 8px (chips) · xl 16px (cards) */
@@ -50,6 +53,55 @@
   --ok-text: oklch(0.478 0.108 152.6);
   --map-land: oklch(0.929 0.014 84.6);
   --map-sea: oklch(0.895 0.013 208.8);
+
+  /* Floating glass panels over the map (DESIGN2 §4) */
+  --glass: rgb(255 255 255 / 0.84);
+  --glass-strong: rgb(255 255 255 / 0.95); /* dense panels (lists): legible over any map */
+  --elev-1: 0 1px 2px rgb(0 0 0 / 0.08), 0 6px 16px rgb(0 0 0 / 0.06);
+  --elev-2: 0 1px 2px rgb(0 0 0 / 0.06), 0 16px 40px rgb(0 0 0 / 0.08);
+  color-scheme: light;
+}
+
+/* Dark theme (DESIGN2 §2). `--ink` is "the strongest text colour", so it flips to near-white. */
+.dark {
+  --background: #07080c;
+  --foreground: #f5f6f8;
+  --card: #12141c;
+  --card-foreground: #f5f6f8;
+  --popover: #12141c;
+  --popover-foreground: #f5f6f8;
+  --primary: #f5f6f8;
+  --primary-foreground: #07080c;
+  --secondary: #1d2029;
+  --secondary-foreground: #f5f6f8;
+  --muted: #1d2029;
+  --muted-foreground: #a4a7b2;
+  --accent: #262936;
+  --accent-foreground: #f5f6f8;
+  --border: rgb(255 255 255 / 0.09);
+  --input: rgb(255 255 255 / 0.16);
+  --ring: rgb(255 255 255 / 0.4);
+  --chart-4: #f5f6f8;
+  --chart-5: #3a3d4a;
+
+  --paper: #07080c;
+  --ink: #f5f6f8;
+  --fire-text: #ff6b6b;
+  --flame-text: #ff9e3d;
+  --safe: #a4a7b2;
+  --safe-line: #3a3d4a;
+  --charcoal: #3a3d4a;
+  --sand: #12141c;
+  --ok: #34d399;
+  --ok-text: #34d399;
+  --map-land: #1d1f22;
+  --map-sea: #0f1a20;
+
+  --glass: rgb(18 20 28 / 0.72);
+  --glass-strong: rgb(18 20 28 / 0.94);
+  --elev-1: 0 8px 32px rgb(0 0 0 / 0.45), 0 2px 8px rgb(0 0 0 / 0.3);
+  --elev-2: 0 8px 32px rgb(0 0 0 / 0.45), 0 2px 8px rgb(0 0 0 / 0.3);
+  color-scheme: dark;
 }
 
 @theme inline {
@@ -106,8 +158,8 @@
   --color-map-sea: var(--map-sea);
 
   /* Elevation (DESIGN.md §6) */
-  --shadow-1: 0 1px 2px rgb(0 0 0 / 0.08), 0 6px 16px rgb(0 0 0 / 0.06);
-  --shadow-2: 0 1px 2px rgb(0 0 0 / 0.06), 0 16px 40px rgb(0 0 0 / 0.08);
+  --shadow-1: var(--elev-1);
+  --shadow-2: var(--elev-2);
   --shadow-toast: 0 8px 24px rgb(0 0 0 / 0.2);
 }
 
@@ -142,6 +194,21 @@
   color: var(--muted-foreground);
 }
 
+/* The one look of every panel that floats over the map (DESIGN2 §4). No glass inside glass. */
+@utility glass {
+  background: var(--glass-bg, var(--glass));
+  backdrop-filter: blur(24px) saturate(160%);
+  -webkit-backdrop-filter: blur(24px) saturate(160%);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  box-shadow: var(--elev-1);
+}
+
+/* Same glass, nearly opaque: for panels full of text (DESIGN2 §1.4, "glass, but legible"). */
+@utility glass-strong {
+  --glass-bg: var(--glass-strong);
+}
+
 @utility status-word {
   font-family: var(--font-mono);
   font-weight: 600;
@@ -149,6 +216,77 @@
   line-height: 1.2;
   letter-spacing: 0.06em;
   text-transform: uppercase;
+}
+
+/* MapLibre chrome follows the theme: solid popovers, never glass-on-glass (DESIGN2 §4, §8). */
+.maplibregl-popup-content {
+  background: var(--popover);
+  color: var(--popover-foreground);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--elev-1);
+}
+.maplibregl-popup-close-button {
+  color: var(--muted-foreground);
+}
+.maplibregl-popup-anchor-top .maplibregl-popup-tip,
+.maplibregl-popup-anchor-top-left .maplibregl-popup-tip,
+.maplibregl-popup-anchor-top-right .maplibregl-popup-tip {
+  border-bottom-color: var(--popover);
+}
+.maplibregl-popup-anchor-bottom .maplibregl-popup-tip,
+.maplibregl-popup-anchor-bottom-left .maplibregl-popup-tip,
+.maplibregl-popup-anchor-bottom-right .maplibregl-popup-tip {
+  border-top-color: var(--popover);
+}
+.maplibregl-popup-anchor-left .maplibregl-popup-tip {
+  border-right-color: var(--popover);
+}
+.maplibregl-popup-anchor-right .maplibregl-popup-tip {
+  border-left-color: var(--popover);
+}
+.dark .maplibregl-ctrl-group {
+  background: var(--popover);
+  border: 1px solid var(--border);
+}
+.dark .maplibregl-ctrl-group button + button {
+  border-top-color: var(--border);
+}
+.dark .maplibregl-ctrl-group button .maplibregl-ctrl-icon {
+  filter: invert(1);
+}
+.dark .maplibregl-ctrl-scale {
+  background: rgb(0 0 0 / 0.4);
+  color: var(--muted-foreground);
+  border-color: var(--muted-foreground);
+}
+.dark .maplibregl-ctrl-attrib,
+.dark .maplibregl-ctrl-attrib.maplibregl-compact {
+  background: rgb(0 0 0 / 0.4);
+  color: var(--muted-foreground);
+}
+.dark .maplibregl-ctrl-attrib a {
+  color: var(--muted-foreground);
+}
+
+/* Thin scrollbars inside panels (DESIGN2 §8). */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in oklab, var(--foreground) 18%, transparent) transparent;
+}
+
+@keyframes fade-slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@utility animate-in-up {
+  animation: fade-slide-up 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 @media (prefers-reduced-motion: reduce) {

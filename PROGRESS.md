@@ -60,6 +60,7 @@ entries short and factual. Use absolute dates (YYYY-MM-DD).
 | D-10 | 2026-11-20 | A manual `POST /alerts` is sent at once (the operator's click is the approval). Cancel applies only to sent alerts; a pending flag is rejected instead. The audit log records when, not who (one shared token) | #36 |
 | D-11 | 2026-11-20 | #25 (approval queue) and #10 (phone page) start before the design mockups (#8): built from SPEC §6 with plain styling, restyled later | Owner, to get flag → approve → phone working sooner |
 | D-12 | 2026-11-20 | Wave 3 builds #12 #21 #28 #29 against stub/fixture data (current placeholder texts, stub scoreboard, stub detections and risk cells, flagged `stub`); real data from #11 #4 #5 #19 #27 drops in later with no code change | Owner, nothing was unblocked |
+| D-13 | 2026-11-20 | Dashboard UI follows DESIGN1 (light: paper/ink/fire, status words) + DESIGN2 (dark glass, map full-bleed, floating panels). Light/dark toggle (kept in the browser), map view Heatmap / 3D / Normal (Normal follows the theme). Brand is "Hareeq" with the logos in `dashboard/public/`. Each fact has one home in the UI: receivers + data age in the status pill, connection problems in the top banners, layer toggles in the Layers card only, pending count on the Approval tab | Owner |
 | D-09 | 2026-11-20 | If `OPERATOR_TOKEN` is unset, write endpoints stay open and log a warning (dev mode). If it is set, the header is required (401 otherwise). The demo sets it | Wave 1 seam, coordinator default |
 
 ### 3.2 Open (waiting on the owner)

@@ -1,5 +1,5 @@
 // Alert log (DESIGN.md §8): time · status · place · source, newest first. Sent and cancelled rows link
-// to their CAP 1.2 message. "0 receivers connected" is shown in red when nobody would get it.
+// to their CAP 1.2 message. The receiver count lives in the status pill only.
 import type { Alert } from "../api/client";
 import { api } from "../api/client";
 import { alertStatusWord, fmtClock, hasCap, lastChangeAt } from "../format";
@@ -11,11 +11,11 @@ function badge(a: Alert): BadgeStatus {
   return a.status === "cancelled" ? "cancel" : a.level;
 }
 
-export function AlertLog({ alerts, phones }: { alerts: Alert[]; phones: number | undefined }) {
+export function AlertLog({ alerts }: { alerts: Alert[] }) {
   const sent = alerts.filter((a) => a.status === "sent").length;
   const cancelled = alerts.filter((a) => a.status === "cancelled").length;
   return (
-    <section className="max-h-[34%] shrink-0 overflow-y-auto border-t bg-card px-4 py-3" aria-labelledby="log-title">
+    <section className="max-h-[34%] shrink-0 overflow-y-auto border-t px-4 py-3" aria-labelledby="log-title">
       <div className="mb-2 flex items-baseline justify-between">
         <h2 id="log-title" className="label-mono">
           Alert log
@@ -24,7 +24,6 @@ export function AlertLog({ alerts, phones }: { alerts: Alert[]; phones: number |
           {sent} sent · {cancelled} cancelled
         </span>
       </div>
-      {phones === 0 && <p className="mb-1.5 text-xs font-semibold text-fire-text">0 receivers connected</p>}
       {alerts.length === 0 && <p className="text-sm text-muted-foreground">No alert yet for this fire.</p>}
       <ol className="flex flex-col gap-1.5">
         {[...alerts].reverse().map((a) => (

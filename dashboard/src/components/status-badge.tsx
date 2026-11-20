@@ -12,7 +12,7 @@ const statusBadge = cva(
         get_ready: "bg-flame text-flame-foreground",
         safe: "bg-transparent border-border text-safe",
         update: "bg-primary text-primary-foreground",
-        cancel: "bg-charcoal text-white",
+        cancel: "bg-charcoal text-white dark:text-foreground",
         preventive: "bg-transparent border-ink text-ink",
       },
     },

@@ -7,11 +7,10 @@ export const mapColors = {
   zone1hLine: "#E3262B",
   zone2hFill: "rgba(242, 106, 33, 0.25)",
   zone2hLine: "#F26A21",
-  nextPassLine: "#1C1B1A",
-  alertArea: "#1C1B1A",
   land: "#ECE7DD",
   sea: "#D3DFE1",
   ink: "#1C1B1A",
+  inkOnDark: "#F5F6F8", // the same lines on a dark map (DESIGN2 --text)
   safe: "#6F6A62",
 } as const;
 

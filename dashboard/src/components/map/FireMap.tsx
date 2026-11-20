@@ -32,6 +32,9 @@ export type LayerKey =
 
 export type LayerVisibility = Record<LayerKey, boolean>;
 
+/** Map view picked by the operator: heat (dark + fire heatmap), 3d (relief, tilted), normal (follows the theme). */
+export type Basemap = "heat" | "3d" | "normal";
+
 export interface MapView {
   center: [number, number]; // lat, lon
   zoom: number;
@@ -49,6 +52,9 @@ interface Props {
   risk: RiskResponse | undefined;
   layers: LayerVisibility;
   view: MapView | null;
+  basemap: Basemap;
+  /** Dark theme: the Normal map turns dark too. */
+  dark: boolean;
   demo: boolean; // a click starts a fire
   onMapClick: (p: LatLon) => void;
   /** Overlay cards (layers, weather, hint), positioned by their own classes. */
@@ -58,46 +64,63 @@ interface Props {
 maplibregl.setWorkerUrl(workerUrl);
 
 const HOME: [number, number] = [4.1, 36.6]; // lon, lat
-// Full-colour basemap (forests, relief, roads) so the operator reads the terrain the fire is in.
-const BASEMAP = "https://tiles.openfreemap.org/styles/liberty";
-const STYLE_TIMEOUT_MS = 4000;
-// Offline (a hall with no internet): plain land, the fire layers still draw.
-const OFFLINE_STYLE: StyleSpecification = {
-  version: 8,
-  sources: {},
-  layers: [{ id: "background", type: "background", paint: { "background-color": mapColors.land } }],
+// One style per view: OpenFreeMap first, CARTO if it is slow or down, plain land if both fail (offline).
+type StyleKey = "dark" | "light" | "relief";
+const STYLES: Record<StyleKey, string[]> = {
+  dark: ["https://tiles.openfreemap.org/styles/dark", "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json"],
+  relief: ["https://tiles.openfreemap.org/styles/liberty", "https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json"],
+  light: ["https://tiles.openfreemap.org/styles/positron", "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json"],
 };
 
-async function loadStyle(): Promise<string | StyleSpecification> {
-  try {
-    const ctl = new AbortController();
-    const t = window.setTimeout(() => ctl.abort(), STYLE_TIMEOUT_MS);
-    const r = await fetch(BASEMAP, { signal: ctl.signal });
-    window.clearTimeout(t);
-    if (!r.ok) return OFFLINE_STYLE;
-    return (await r.json()) as StyleSpecification;
-  } catch {
-    return OFFLINE_STYLE;
+/** Heatmap is always on a dark map (the heat reads best there); 3D uses relief; Normal follows the theme. */
+function styleKey(b: Basemap, dark: boolean): StyleKey {
+  if (b === "heat") return "dark";
+  if (b === "3d") return "relief";
+  return dark ? "dark" : "light";
+}
+// Terrain for the 3D map (AWS open elevation tiles, Terrarium encoding).
+const DEM_TILES = "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png";
+const STYLE_TIMEOUT_MS = 5000;
+
+function offlineStyle(key: StyleKey): StyleSpecification {
+  const color = key === "dark" ? "#1d1f22" : mapColors.land;
+  return { version: 8, sources: {}, layers: [{ id: "background", type: "background", paint: { "background-color": color } }] };
+}
+
+async function loadStyle(key: StyleKey): Promise<string | StyleSpecification> {
+  for (const url of STYLES[key]) {
+    try {
+      const ctl = new AbortController();
+      const t = window.setTimeout(() => ctl.abort(), STYLE_TIMEOUT_MS);
+      const r = await fetch(url, { signal: ctl.signal });
+      window.clearTimeout(t);
+      if (r.ok) return (await r.json()) as StyleSpecification;
+    } catch {
+      // try the next one
+    }
   }
+  return offlineStyle(key);
 }
 
 // Which style layers each toggle drives.
 const LAYER_IDS: Record<Exclude<LayerKey, "villages">, string[]> = {
-  history: ["history"],
+  history: ["history", "heat-history"],
   risk: ["risk"],
   zone2h: ["zone2h-fill", "zone2h-line"],
   zone1h: ["zone1h-fill", "zone1h-line"],
   burning: ["burning"],
   nextPass: ["next-pass"],
   alertAreas: ["alert-areas"],
-  detections: ["detections"],
+  detections: ["detections", "heat-detections"],
 };
 
 const PICK_PX = 8;
 
-function addLayers(map: maplibregl.Map) {
+function addLayers(map: maplibregl.Map, kind: Basemap, key: StyleKey) {
+  // Ink lines (next pass, alert areas, dot outlines) turn light on a dark map, or they disappear.
+  const line = key === "dark" ? mapColors.inkOnDark : mapColors.ink;
   const src = (id: string) => map.addSource(id, { type: "geojson", data: geo.EMPTY });
-  ["history", "risk", "zones", "burning", "next-pass", "alert-areas", "detections"].forEach(src);
+  ["history", "history-pts", "risk", "zones", "burning", "next-pass", "alert-areas", "detections"].forEach(src);
 
   map.addLayer({
     id: "history",
@@ -173,13 +196,13 @@ function addLayers(map: maplibregl.Map) {
     id: "next-pass",
     type: "line",
     source: "next-pass",
-    paint: { "line-color": mapColors.nextPassLine, "line-opacity": 0.7, "line-width": 1.5, "line-dasharray": [1, 2] },
+    paint: { "line-color": line, "line-opacity": 0.7, "line-width": 1.5, "line-dasharray": [1, 2] },
   });
   map.addLayer({
     id: "alert-areas",
     type: "line",
     source: "alert-areas",
-    paint: { "line-color": mapColors.alertArea, "line-opacity": 0.6, "line-width": 1.5, "line-dasharray": [2, 2] },
+    paint: { "line-color": line, "line-opacity": 0.6, "line-width": 1.5, "line-dasharray": [2, 2] },
   });
   map.addLayer({
     id: "detections",
@@ -188,11 +211,58 @@ function addLayers(map: maplibregl.Map) {
     paint: {
       "circle-color": ["match", ["get", "age"], "day", DETECTION_COLOR.day, DETECTION_COLOR.week],
       "circle-radius": ["match", ["get", "age"], "day", 4.5, 3],
-      "circle-stroke-color": mapColors.ink,
+      "circle-stroke-color": line,
       "circle-stroke-width": 1,
       "circle-opacity": 0.9,
     },
   });
+
+  if (kind === "heat") {
+    // The heat replaces the history squares; detections stay as dots once zoomed in.
+    map.setPaintProperty("history", "fill-opacity", 0);
+    const heat = (id: string, source: string, weight: maplibregl.ExpressionSpecification, radius: number) =>
+      map.addLayer(
+        {
+          id,
+          type: "heatmap",
+          source,
+          paint: {
+            "heatmap-weight": weight,
+            "heatmap-radius": ["interpolate", ["linear"], ["zoom"], 6, radius, 12, radius * 3],
+            "heatmap-intensity": ["interpolate", ["linear"], ["zoom"], 6, 0.8, 12, 2],
+            "heatmap-opacity": ["interpolate", ["linear"], ["zoom"], 11, 0.85, 14, 0.25],
+            "heatmap-color": [
+              "interpolate",
+              ["linear"],
+              ["heatmap-density"],
+              0,
+              "rgba(0,0,0,0)",
+              0.2,
+              "#5b1a8f",
+              0.4,
+              "#c2185b",
+              0.6,
+              "#f4511e",
+              0.8,
+              "#ffb300",
+              1,
+              "#fff59d",
+            ],
+          },
+        },
+        "zone2h-fill",
+      );
+    heat("heat-history", "history-pts", ["get", "weight"], 10);
+    heat("heat-detections", "detections", ["match", ["get", "age"], "day", 1, 0.5], 14);
+    map.setPaintProperty("detections", "circle-opacity", ["interpolate", ["linear"], ["zoom"], 9, 0, 11, 0.9]);
+    map.setPaintProperty("detections", "circle-stroke-opacity", ["interpolate", ["linear"], ["zoom"], 9, 0, 11, 1]);
+  }
+
+  if (kind === "3d") {
+    map.addSource("dem", { type: "raster-dem", tiles: [DEM_TILES], encoding: "terrarium", tileSize: 256, maxzoom: 14 });
+    map.addLayer({ id: "hillshade", type: "hillshade", source: "dem", paint: { "hillshade-exaggeration": 0.5 } }, "history");
+    map.setTerrain({ source: "dem", exaggeration: 1.4 });
+  }
 }
 
 // ---- popups (built with textContent, never innerHTML: values come from data files) ----
@@ -244,7 +314,7 @@ function pinElement(name: string, statusLine: string, color: string, textClass: 
   const el = document.createElement("div");
   el.className = "flex items-center gap-1.5 pointer-events-none select-none";
   const dot = document.createElement("span");
-  dot.className = cn("block shrink-0 rounded-full ring-[3px] ring-white shadow-1", small ? "size-3" : "size-3.5");
+  dot.className = cn("block shrink-0 rounded-full ring-[3px] ring-card shadow-1", small ? "size-3" : "size-3.5");
   dot.style.background = color;
   const card = document.createElement("div");
   card.className = "w-[150px] rounded-md border-l-[3px] bg-card px-2.5 py-1.5 shadow-1";
@@ -265,7 +335,7 @@ function safeDot(name: string, line: string): HTMLElement {
   const el = document.createElement("div");
   el.className = "flex items-center";
   const dot = document.createElement("span");
-  dot.className = "block size-2.5 rounded-full bg-safe ring-2 ring-white";
+  dot.className = "block size-2.5 rounded-full bg-safe ring-2 ring-card";
   el.title = `${name}: ${line}`;
   el.append(dot);
   return el;
@@ -318,6 +388,9 @@ function useMarkers(map: maplibregl.Map | null, dataKey: string, items: PinItem[
 export function FireMap(p: Props) {
   const box = useRef<HTMLDivElement>(null);
   const [map, setMap] = useState<maplibregl.Map | null>(null); // set once the style and our layers are in
+  const [styleSeq, setStyleSeq] = useState(0); // bumps after each basemap change, so the data is set again
+  const kind = useRef(p.basemap);
+  const key = useRef(styleKey(p.basemap, p.dark));
 
   const onClick = useEffectEvent((e: MapMouseEvent) => {
     if (!map) return;
@@ -352,7 +425,7 @@ export function FireMap(p: Props) {
   useEffect(() => {
     let m: maplibregl.Map | null = null;
     let cancelled = false;
-    void loadStyle().then((style) => {
+    void loadStyle(key.current).then((style) => {
       if (cancelled || !box.current) return;
       m = new maplibregl.Map({
         container: box.current,
@@ -362,19 +435,17 @@ export function FireMap(p: Props) {
         maxZoom: 17,
         attributionControl: { compact: true, customAttribution: "Fire data NASA FIRMS" },
       });
-      m.addControl(new maplibregl.NavigationControl({ showCompass: false }), "bottom-right");
+      m.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "bottom-right");
       m.addControl(new maplibregl.ScaleControl({ unit: "metric" }), "bottom-right");
-      // Add our layers as soon as the style is parsed. "load" also waits for every basemap tile, so a slow
-      // or blocked tile server would otherwise leave the fire layers and pins off the map.
-      let ready = false;
-      const init = () => {
-        if (!m || ready || !m.isStyleLoaded()) return;
-        ready = true;
-        addLayers(m);
+      // Add our layers as soon as each style is parsed ("style.load" does not wait for the tiles, so a slow
+      // tile server cannot keep the fire layers off the map). A basemap change replaces the style, so it runs again.
+      m.on("style.load", () => {
+        if (!m) return;
+        addLayers(m, kind.current, key.current);
+        m.easeTo({ pitch: kind.current === "3d" ? 60 : 0, duration: 800 });
         setMap(m);
-      };
-      m.on("styledata", init);
-      m.on("load", init);
+        setStyleSeq((n) => n + 1);
+      });
       m.on("click", (e) => onClick(e));
     });
     return () => {
@@ -382,25 +453,42 @@ export function FireMap(p: Props) {
       m?.remove();
       setMap(null);
     };
-  }, []);
+  }, []); // created once; view and theme changes go through setStyle below
+
+  // View or theme switch: load the new style, then "style.load" adds our layers back.
+  useEffect(() => {
+    const next = styleKey(p.basemap, p.dark);
+    if (!map || (kind.current === p.basemap && key.current === next)) return;
+    kind.current = p.basemap;
+    key.current = next;
+    if (p.basemap !== "3d") map.setTerrain(null);
+    let stale = false;
+    void loadStyle(next).then((style) => {
+      if (!stale) map.setStyle(style, { diff: false });
+    });
+    return () => {
+      stale = true;
+    };
+  }, [map, p.basemap, p.dark]);
 
   // Data → sources.
   const setData = (id: string, data: GeoJSON.FeatureCollection) => (map?.getSource(id) as GeoJSONSource | undefined)?.setData(data);
-  useEffect(() => void setData("zones", geo.zones(p.prediction)), [map, p.prediction]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => void setData("burning", geo.burningCells(p.burning)), [map, p.burning]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => void setData("next-pass", geo.nextPassCells(p.truth)), [map, p.truth]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => void setData("alert-areas", geo.alertAreas(p.alerts)), [map, p.alerts]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => void setData("detections", geo.detections(p.detections)), [map, p.detections]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => void setData("history", geo.history(p.history)), [map, p.history]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => void setData("risk", geo.riskCells(p.risk)), [map, p.risk]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => void setData("zones", geo.zones(p.prediction)), [map, styleSeq, p.prediction]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => void setData("burning", geo.burningCells(p.burning)), [map, styleSeq, p.burning]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => void setData("next-pass", geo.nextPassCells(p.truth)), [map, styleSeq, p.truth]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => void setData("alert-areas", geo.alertAreas(p.alerts)), [map, styleSeq, p.alerts]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => void setData("detections", geo.detections(p.detections)), [map, styleSeq, p.detections]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => void setData("history", geo.history(p.history)), [map, styleSeq, p.history]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => void setData("history-pts", geo.historyPoints(p.history)), [map, styleSeq, p.history]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => void setData("risk", geo.riskCells(p.risk)), [map, styleSeq, p.risk]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Toggles → layer visibility.
   useEffect(() => {
     if (!map) return;
     for (const [k, ids] of Object.entries(LAYER_IDS) as [keyof typeof LAYER_IDS, string[]][]) {
-      for (const id of ids) map.setLayoutProperty(id, "visibility", p.layers[k] ? "visible" : "none");
+      for (const id of ids) if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", p.layers[k] ? "visible" : "none");
     }
-  }, [map, p.layers]);
+  }, [map, styleSeq, p.layers]);
 
   // Requested view (replay start, a selected flag or place).
   useEffect(() => {
@@ -435,7 +523,7 @@ export function FireMap(p: Props) {
   useMarkers(map, riskKey, riskPins, true);
 
   return (
-    <div className="relative min-h-0 w-full flex-1 bg-map-land">
+    <div className="absolute inset-0 isolate bg-map-land">
       {/* `absolute!`: maplibre-gl.css sets .maplibregl-map { position: relative } and loads after ours. */}
       <div ref={box} className="absolute! inset-0" aria-label="Fire map" role="region" />
       {p.children}

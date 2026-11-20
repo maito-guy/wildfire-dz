@@ -11,10 +11,10 @@ import { AlertLog } from "./components/AlertLog";
 import { ApprovalQueue } from "./components/ApprovalQueue";
 import type { WindInput } from "./components/Controls";
 import { Controls } from "./components/Controls";
-import type { Mode } from "./components/Header";
-import { Header } from "./components/Header";
-import type { LayerKey, LayerVisibility, MapView } from "./components/map/FireMap";
-import { LayersCard } from "./components/map/MapOverlays";
+import type { HealthState, Mode } from "./components/Header";
+import { Banners, ModeBar, StatusPill } from "./components/Header";
+import type { Basemap, LayerKey, LayerVisibility, MapView } from "./components/map/FireMap";
+import { MapControls } from "./components/map/MapOverlays";
 import { RiskPanel } from "./components/RiskPanel";
 import { Scoreboard } from "./components/Scoreboard";
 import { Settings } from "./components/Settings";
@@ -22,8 +22,12 @@ import type { SendLevel } from "./components/VillageList";
 import { VillageList } from "./components/VillageList";
 import { fmtClock, sortByUrgency, statusWord, windSourceWord } from "./format";
 import { useLiveEvents } from "./hooks/useEventSource";
+import { useTheme } from "./lib/theme";
+import { CaretDown } from "@phosphor-icons/react";
+import { Button } from "@/components/ui/button";
 import { Toaster } from "@/components/ui/sonner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { cn, floating } from "@/lib/utils";
 
 // MapLibre is most of the JS: load it after the lists, so the operator sees villages first on slow links.
 const FireMap = lazy(() => import("./components/map/FireMap").then((m) => ({ default: m.FireMap })));
@@ -70,6 +74,9 @@ export default function App() {
   const [appMode, setAppMode] = useState<Mode>("replay");
   const [layers, setLayers] = useState<LayerVisibility>(DEFAULT_LAYERS);
   const [tab, setTab] = useState("villages");
+  const [panelOpen, setPanelOpen] = useState(true);
+  const [basemap, setBasemap] = useState<Basemap>("normal");
+  const [theme, toggleTheme] = useTheme();
   const [scoreOpen, setScoreOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [demoStartedAt, setDemoStartedAt] = useState<string | null>(null);
@@ -298,109 +305,154 @@ export default function App() {
       : "";
   const setLayer = (k: LayerKey, v: boolean) => setLayers((l) => ({ ...l, [k]: v }));
   const pending = healthQ.data?.pending_alerts ?? 0;
+  const health: HealthState = { data: healthQ.data, unreachable: healthQ.isError, updatedAt: healthQ.dataUpdatedAt };
+  // A tab click on a hidden panel opens it again.
+  const openTab = (t: string) => {
+    setTab(t);
+    setPanelOpen(true);
+  };
+  const reopen = (t: string) => t === tab && setPanelOpen(true);
   const focus = (lat: number, lon: number, zoom: number) =>
     setView((v) => ({ center: [lat, lon], zoom, seq: (v?.seq ?? 0) + 1 }));
 
   return (
-    <div className="flex h-dvh flex-col overflow-hidden">
-      <Header
-        mode={appMode}
-        onMode={changeMode}
-        prediction={prediction}
-        health={{ data: healthQ.data, unreachable: healthQ.isError, updatedAt: healthQ.dataUpdatedAt }}
-        onScoreboard={() => setScoreOpen(true)}
-        onSettings={() => setSettingsOpen(true)}
-      />
-      <Controls
-        mode={appMode}
-        fires={fires.data ?? []}
-        fireId={selectedFire}
-        onSelectFire={loadReplay}
-        canPrev={canPrev}
-        canNext={canNext}
-        onPrev={() => replay && canPrev && showPass(replay, pass - 1)}
-        onNext={() => replay && canNext && showPass(replay, pass + 1)}
-        playing={playing}
-        onTogglePlay={() => setPlaying((x) => !x)}
-        passInfo={passInfo}
-        stub={!!replay?.stub}
-        demoInfo={demoInfo}
-        info={info || (fires.error ? errorText(fires.error) : "")}
-        wind={wind}
-        onWind={setWind}
-        onReset={onReset}
-      />
-      <main className="flex min-h-0 flex-1 flex-col-reverse lg:flex-row">
-        <aside className="flex min-h-0 flex-1 flex-col border-t bg-card lg:w-[440px] lg:flex-none lg:border-r lg:border-t-0">
-          <Tabs value={tab} onValueChange={setTab} className="flex min-h-0 flex-1 flex-col gap-0">
-            <TabsList className="mx-4 mt-3 grid w-auto grid-cols-3">
-              <TabsTrigger value="villages">Villages</TabsTrigger>
-              <TabsTrigger value="approval">
-                Approval
-                {pending > 0 && (
-                  <span className="rounded-full bg-fire px-1.5 font-mono text-[11px] text-white tabular-nums">{pending}</span>
-                )}
-              </TabsTrigger>
-              <TabsTrigger value="risk">Risk today</TabsTrigger>
-            </TabsList>
-            <TabsContent value="villages" className="flex min-h-0 flex-1 flex-col">
-              <VillageList
-                villages={villages}
-                alerts={alerts}
-                busy={busy}
-                onSend={onSend}
-                onCancel={onCancel}
-                onFocus={(v) => focus(v.lat, v.lon, 13)}
+    <div className="relative h-dvh overflow-hidden bg-map-land">
+      {/* Map first (DESIGN2 §1): full-bleed, everything else floats above it. */}
+      <Suspense
+        fallback={
+          <div className="absolute inset-0 grid place-items-center font-mono text-xs text-muted-foreground">Loading map…</div>
+        }
+      >
+        <FireMap
+          prediction={prediction}
+          burning={burning}
+          truth={truth}
+          villages={villages}
+          alerts={alerts}
+          detections={fireData.detections.data}
+          history={fireData.history.data}
+          risk={riskQ.data}
+          layers={layers}
+          view={view}
+          basemap={basemap}
+          dark={theme === "dark"}
+          demo={appMode === "demo"}
+          onMapClick={onMapClick}
+        />
+      </Suspense>
+
+      {/* Phone: one column (bar, status, panel at the bottom). Desktop: work column left, map tools right. */}
+      <div className="pointer-events-none absolute inset-3 z-20 flex flex-col gap-2 pb-[env(safe-area-inset-bottom)] lg:inset-4 lg:flex-row lg:items-start lg:justify-between lg:gap-4">
+        <div className="contents lg:flex lg:h-full lg:w-[420px] lg:shrink-0 lg:flex-col lg:gap-3">
+          <div className="order-1 lg:order-none">
+            <ModeBar mode={appMode} onMode={changeMode} theme={theme}>
+              <Controls
+                mode={appMode}
+                fires={fires.data ?? []}
+                fireId={selectedFire}
+                onSelectFire={loadReplay}
+                canPrev={canPrev}
+                canNext={canNext}
+                onPrev={() => replay && canPrev && showPass(replay, pass - 1)}
+                onNext={() => replay && canNext && showPass(replay, pass + 1)}
+                playing={playing}
+                onTogglePlay={() => setPlaying((x) => !x)}
+                passInfo={passInfo}
+                stub={!!replay?.stub}
+                demoInfo={demoInfo}
+                info={info || (fires.error ? errorText(fires.error) : "")}
+                wind={wind}
+                onWind={setWind}
+                onReset={onReset}
               />
-              <AlertLog alerts={alerts} phones={healthQ.data?.phones_connected} />
-            </TabsContent>
-            <TabsContent value="approval" className="flex min-h-0 flex-1 flex-col">
-              <ApprovalQueue live={live.state} onSelect={(a) => focus(a.area.lat, a.area.lon, 13)} />
-            </TabsContent>
-            <TabsContent value="risk" className="flex min-h-0 flex-1 flex-col">
-              <RiskPanel
-                risk={riskQ.data}
-                error={riskQ.error ? errorText(riskQ.error) : ""}
-                show={layers.risk}
-                onShow={(v) => setLayer("risk", v)}
-                onSelect={(p) => {
-                  setLayer("risk", true);
-                  focus(p.lat, p.lon, 11);
-                }}
-              />
-            </TabsContent>
-          </Tabs>
-        </aside>
-        <div className="relative flex h-[55vh] shrink-0 flex-col lg:h-auto lg:min-w-0 lg:flex-1">
-          <Suspense
-            fallback={
-              <div className="grid flex-1 place-items-center bg-map-land font-mono text-xs text-muted-foreground">
-                Loading map…
-              </div>
-            }
+            </ModeBar>
+          </div>
+
+          <aside
+            className={floating(
+              "glass-strong order-4 mt-auto flex min-h-0 flex-col overflow-hidden lg:order-none lg:mt-0",
+              panelOpen ? "max-h-[64vh] lg:max-h-none lg:flex-1" : "",
+            )}
           >
-            <FireMap
-              prediction={prediction}
-              burning={burning}
-              truth={truth}
-              villages={villages}
-              alerts={alerts}
-              detections={fireData.detections.data}
-              history={fireData.history.data}
-              risk={riskQ.data}
-              layers={layers}
-              view={view}
-              demo={appMode === "demo"}
-              onMapClick={onMapClick}
-            >
-              <LayersCard layers={layers} onChange={setLayer} />
-            </FireMap>
-          </Suspense>
+            <Tabs value={tab} onValueChange={openTab} className="flex min-h-0 flex-1 flex-col gap-0">
+              <div className="flex items-center gap-1 p-2">
+                <TabsList className="grid h-9 flex-1 grid-cols-3 rounded-[10px] bg-secondary p-[3px]">
+                  <TabsTrigger value="villages" onClick={() => reopen("villages")}>
+                    Villages
+                  </TabsTrigger>
+                  <TabsTrigger value="approval" onClick={() => reopen("approval")}>
+                    Approval
+                    {pending > 0 && (
+                      <span className="rounded-full bg-fire px-1.5 font-mono text-[11px] text-fire-foreground tabular-nums">{pending}</span>
+                    )}
+                  </TabsTrigger>
+                  <TabsTrigger value="risk" onClick={() => reopen("risk")}>
+                    Risk today
+                  </TabsTrigger>
+                </TabsList>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={() => setPanelOpen((o) => !o)}
+                  aria-expanded={panelOpen}
+                  aria-label={panelOpen ? "Hide panel" : "Show panel"}
+                  title={panelOpen ? "Hide panel" : "Show panel"}
+                >
+                  <CaretDown weight="bold" className={cn("transition-transform duration-200", !panelOpen && "rotate-180")} />
+                </Button>
+              </div>
+              {panelOpen && (
+                <>
+                  <TabsContent value="villages" className="flex min-h-0 flex-1 flex-col">
+                    <VillageList
+                      villages={villages}
+                      alerts={alerts}
+                      busy={busy}
+                      onSend={onSend}
+                      onCancel={onCancel}
+                      onFocus={(v) => focus(v.lat, v.lon, 13)}
+                    />
+                    <AlertLog alerts={alerts} />
+                  </TabsContent>
+                  <TabsContent value="approval" className="flex min-h-0 flex-1 flex-col">
+                    <ApprovalQueue live={live.state} onSelect={(a) => focus(a.area.lat, a.area.lon, 13)} />
+                  </TabsContent>
+                  <TabsContent value="risk" className="flex min-h-0 flex-1 flex-col">
+                    <RiskPanel
+                      risk={riskQ.data}
+                      error={riskQ.error ? errorText(riskQ.error) : ""}
+                      onSelect={(p) => {
+                        setLayer("risk", true);
+                        focus(p.lat, p.lon, 11);
+                      }}
+                    />
+                  </TabsContent>
+                </>
+              )}
+            </Tabs>
+          </aside>
         </div>
-      </main>
+
+        <div className="order-2 flex flex-col items-end gap-2 lg:order-none">
+          <StatusPill
+            prediction={prediction}
+            health={health}
+            theme={theme}
+            onTheme={toggleTheme}
+            onScoreboard={() => setScoreOpen(true)}
+            onSettings={() => setSettingsOpen(true)}
+          />
+          <MapControls basemap={basemap} onBasemap={setBasemap} layers={layers} onLayer={setLayer} />
+        </div>
+
+        <div className="order-3 lg:absolute lg:left-1/2 lg:top-0 lg:w-max lg:max-w-md lg:-translate-x-1/2">
+          <Banners health={health} live={live.state} prediction={prediction} />
+        </div>
+      </div>
+
       <Scoreboard open={scoreOpen} onOpenChange={setScoreOpen} />
       <Settings open={settingsOpen} onOpenChange={setSettingsOpen} />
-      <Toaster />
+      <Toaster theme={theme} />
     </div>
   );
 }

@@ -71,18 +71,15 @@ export function VillageList({ villages, alerts, busy, onSend, onCancel, onFocus 
 
   return (
     <section className="flex min-h-0 flex-1 flex-col" aria-labelledby="villages-title">
-      <div className="px-4 pb-3 pt-4">
-        <h2 id="villages-title" className="font-display text-[21px] font-bold tracking-[-0.01em]">
-          Villages at risk
-        </h2>
-        <p className="font-mono text-xs text-muted-foreground">
-          {villages.length} in reach · sorted by minutes left
+      <div className="px-4 pb-3 pt-3">
+        <p id="villages-title" className="label-mono">
+          Villages at risk · most urgent first
         </p>
         <ToggleGroup
           type="single"
           value={filter}
           onValueChange={(v) => v && setFilter(v as Filter)}
-          className="mt-3 flex-nowrap gap-1"
+          className="mt-2.5 flex-nowrap gap-1"
           aria-label="Filter villages by status"
         >
           {(
@@ -96,10 +93,10 @@ export function VillageList({ villages, alerts, busy, onSend, onCancel, onFocus 
             <ToggleGroupItem
               key={v}
               value={v}
-              className="h-7 shrink-0 rounded-full! border bg-card px-2.5 text-[13px] font-semibold data-[state=on]:border-ink data-[state=on]:bg-ink data-[state=on]:text-white"
+              className="h-7 shrink-0 rounded-full! border bg-card px-2.5 text-[13px] font-semibold data-[state=on]:border-primary data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
             >
               {label}
-              <span className="rounded-full bg-secondary px-1.5 font-mono text-[11px] text-ink tabular-nums">{n}</span>
+              <span className="rounded-full bg-secondary px-1.5 font-mono text-[11px] text-foreground tabular-nums">{n}</span>
             </ToggleGroupItem>
           ))}
         </ToggleGroup>
@@ -152,7 +149,7 @@ export function VillageList({ villages, alerts, busy, onSend, onCancel, onFocus 
         })}
       </ol>
 
-      <div className="flex flex-wrap items-center gap-2 border-t bg-card px-4 py-3">
+      <div className="flex flex-wrap items-center gap-2 border-t px-4 py-3">
         <div className="mr-auto">
           <p className="text-sm font-semibold tabular-nums">{chosen.length} selected</p>
           <Select value={level} onValueChange={(v) => setLevel(v as SendLevel)}>

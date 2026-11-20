@@ -1,34 +1,23 @@
 // Risk today (#28): the very-high-risk places and their top factors. Each place is a preventive flag in
-// the approval queue; this list only shows where it stands. The map layer toggle lives in the Layers card.
+// the approval queue; this list only shows where it stands. The map layer is switched in the Layers card
+// only; picking a place here turns it on.
 import { MapPin } from "@phosphor-icons/react";
 import type { RiskPlace, RiskResponse } from "../api/risk";
 import { RISK_COLOR, RISK_WORD } from "../api/risk";
 import { alertStatusWord } from "../format";
-import { Switch } from "@/components/ui/switch";
 
 interface Props {
   risk: RiskResponse | undefined;
   error: string;
-  show: boolean;
-  onShow: (show: boolean) => void;
   /** Show this place on the map. */
   onSelect: (p: RiskPlace) => void;
 }
 
-export function RiskPanel({ risk, error, show, onShow, onSelect }: Props) {
+export function RiskPanel({ risk, error, onSelect }: Props) {
   return (
     <section className="flex min-h-0 flex-1 flex-col" aria-labelledby="risk-title">
-      <div className="px-4 pb-3 pt-4">
-        <div className="flex items-center justify-between gap-3">
-          <h2 id="risk-title" className="font-display text-[21px] font-bold tracking-[-0.01em]">
-            Risk today
-          </h2>
-          <label className="flex items-center gap-2 text-[13px] font-semibold">
-            On the map
-            <Switch checked={show} onCheckedChange={onShow} />
-          </label>
-        </div>
-        <p className="font-mono text-xs text-muted-foreground tabular-nums">
+      <div className="px-4 pb-3 pt-3">
+        <p id="risk-title" className="label-mono tabular-nums">
           {risk ? `${risk.date} · ${risk.places.length} ${RISK_WORD[risk.flag_level].toLowerCase()}-risk places` : "Loading…"}
         </p>
         {error && <p className="mt-2 text-sm font-semibold text-fire-text">Could not load the risk map: {error}</p>}
@@ -65,9 +54,6 @@ export function RiskPanel({ risk, error, show, onShow, onSelect }: Props) {
           </li>
         ))}
       </ol>
-      <p className="border-t bg-card px-4 py-3 text-xs text-muted-foreground">
-        Each place is a preventive flag in the approval queue. Nothing is sent without a click.
-      </p>
     </section>
   );
 }
