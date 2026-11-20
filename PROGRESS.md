@@ -12,7 +12,7 @@ entries short and factual. Use absolute dates (YYYY-MM-DD).
 ## 1. Current state
 
 - **Phase:** delivery (`RULES.md`, `PROJECT_MANAGEMENT_RULES.md` §9–13). Spec: `SPEC.md` v0.3.1.
-- **Running:** agent on #39 (Turborepo, worktree `.claude/worktrees/39`). Next: #40 Docker (blocked by #39). Wave 1 merged into dev: #14 (PR #35), #24 (#36), #26 (#37), #32 (#38).
+- **Running:** wave 2: agents on #39 Turborepo, #15 status bar, #25 approval queue UI, #10 phone page (worktrees `.claude/worktrees/{39,15,25,10}`). Next: #40 Docker after #39.
 - **Next up:** merge #39, run #40. Then #15 (dashboard status bar) and #25/#10 once design #8 lands.
 - **Blockers:** data issues #4 #5 #6 #17 need the Algeria Fire Map export and a laptop run (Electronics); #8 #11 need humans (design, translations).
 
@@ -55,6 +55,7 @@ entries short and factual. Use absolute dates (YYYY-MM-DD).
 | D-07 | 2026-11-20 | Product pivot (spec v0.3): no mobile app. Dashboard + AI flags + operator approval + simulated cell broadcast (CAP) + risk map; planting demo in phase 3. Closed #2 #3 #13 #23 | Owner |
 | D-08 | 2026-11-20 | Dashboard in React + TypeScript, with FastAPI integrating the AI (spec v0.3.1) | Owner |
 | D-10 | 2026-11-20 | A manual `POST /alerts` is sent at once (the operator's click is the approval). Cancel applies only to sent alerts; a pending flag is rejected instead. The audit log records when, not who (one shared token) | #36 |
+| D-11 | 2026-11-20 | #25 (approval queue) and #10 (phone page) start before the design mockups (#8): built from SPEC §6 with plain styling, restyled later | Owner, to get flag → approve → phone working sooner |
 | D-09 | 2026-11-20 | If `OPERATOR_TOKEN` is unset, write endpoints stay open and log a warning (dev mode). If it is set, the header is required (401 otherwise). The demo sets it | Wave 1 seam, coordinator default |
 
 ### 3.2 Open (waiting on the owner)
