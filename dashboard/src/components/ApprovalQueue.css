@@ -9,8 +9,11 @@
 .aq-village { flex: 1; font-weight: 600; }
 .aq-minutes { font-weight: 600; white-space: nowrap; }
 .aq-facts { margin: 4px 0; }
-.aq-preview p { margin: 4px 0; padding: 4px 6px; background: #f4f4f4; white-space: pre-wrap; }
-.aq-preview p[dir="rtl"] { text-align: right; }
+.aq-text { margin: 4px 0; }
+.aq-lang { display: block; font-weight: 600; }
+.aq-text p { margin: 2px 0 0; padding: 4px 6px; background: #f4f4f4; white-space: pre-wrap; }
+.aq-text p[dir="rtl"] { text-align: right; }
+.aq-preview .aq-missing { margin: 4px 0; padding: 0; background: none; color: #555; }
 .aq-edit, .aq-new-body { display: flex; flex-direction: column; gap: 6px; margin: 6px 0; }
 .aq-edit label, .aq-reason { display: flex; flex-direction: column; gap: 2px; }
 .aq-edit textarea, .aq-reason input { width: 100%; font: inherit; }

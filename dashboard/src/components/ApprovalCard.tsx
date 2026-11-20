@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import type { Alert } from "../api/client";
 import type { AlertApprove } from "../api/approval";
-import { langsOf, SOURCE_WORD } from "../api/approval";
+import { langsOf, missingLangs, SOURCE_WORD } from "../api/approval";
 import { fmtAge, statusWord } from "../format";
 
 interface Props {
@@ -22,7 +22,7 @@ function minutesText(a: Alert): string {
 
 export function ApprovalCard({ alert: a, selected, onSelect, onApprove, onReject }: Props) {
   const langs = langsOf(a.texts);
-  const [lang, setLang] = useState(langs[0]?.code ?? "");
+  const missing = missingLangs(a.texts);
   const [mode, setMode] = useState<Mode>("view");
   const [busy, setBusy] = useState<"" | "approve" | "reject">("");
   const [error, setError] = useState("");
@@ -31,7 +31,6 @@ export function ApprovalCard({ alert: a, selected, onSelect, onApprove, onReject
   const [reason, setReason] = useState("");
   const inFlight = useRef(false); // no double send, even before the re-render disables the buttons
 
-  const shown = langs.find((l) => l.code === lang) ?? langs[0];
   const radiusNum = Number(radius);
   const radiusOk = radius.trim() !== "" && Number.isFinite(radiusNum) && radiusNum > 0 && radiusNum <= 50;
   const emptyText = mode === "edit" && langs.some((l) => (drafts[l.code] ?? "").trim() === "");
@@ -96,21 +95,22 @@ export function ApprovalCard({ alert: a, selected, onSelect, onApprove, onReject
         pending approval{selected ? " · shown on the map" : ""}
       </div>
 
-      {mode !== "edit" && shown && (
-        <div className="aq-preview">
-          <label className="small">
-            Text{" "}
-            <select value={shown.code} onChange={(e) => setLang(e.target.value)}>
-              {langs.map((l) => (
-                <option key={l.code} value={l.code}>
-                  {l.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <p dir={shown.rtl ? "rtl" : "ltr"} lang={shown.code}>
-            {a.texts[shown.code]}
-          </p>
+      {mode !== "edit" && langs.length > 0 && (
+        <div className="aq-preview" aria-label="Texts the phones will show">
+          {langs.map((l) => (
+            <div key={l.code} className="aq-text">
+              <span className="small aq-lang">{l.name}</span>
+              <p dir={l.rtl ? "rtl" : "ltr"} lang={l.code}>
+                {a.texts[l.code]}
+              </p>
+            </div>
+          ))}
+          {missing.length > 0 && (
+            <p className="small aq-missing">
+              Not ready yet: {missing.map((l) => l.name).join(", ")}. Phones that chose one of these show{" "}
+              {"fr" in a.texts ? "French" : "English"} first.
+            </p>
+          )}
         </div>
       )}
       {langs.length === 0 && <p className="small">No alert text yet.</p>}
