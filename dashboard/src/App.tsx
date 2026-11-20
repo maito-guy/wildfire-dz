@@ -282,6 +282,7 @@ export default function App() {
           />
           <VillageList villages={villages} busy={busy} onSend={onSend} onCancel={onCancel} />
           <AlertLog alerts={alerts} />
+          <Scoreboard />
           <Settings />
         </aside>
       </main>
