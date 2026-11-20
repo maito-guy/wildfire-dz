@@ -12,7 +12,7 @@ entries short and factual. Use absolute dates (YYYY-MM-DD).
 ## 1. Current state
 
 - **Phase:** delivery (`RULES.md`, `PROJECT_MANAGEMENT_RULES.md` §9–13). Spec: `SPEC.md` v0.3.1.
-- **Running:** nothing. Wave 2 complete: #15 (PR #41), #39 (PR #42), #10 (PR #43), #25 (PR #44), #40 (PR #45).
+- **Running:** wave 3 agents on #12 #21 #28 #29 (worktrees `.claude/worktrees/{12,21,28,29}`, D-12). Wave 2 complete: #15 (PR #41), #39 (PR #42), #10 (PR #43), #25 (PR #44), #40 (PR #45).
 - **Next up:** no code issue is unblocked. #12 needs #11 (texts); #9 #29 need #4 #5 (data); #28 needs #27; #18 #20 #21 need #6 #17 #19. #16 needs only #12. Restyle #25/#10 when #8 lands (D-11).
 - **Blockers:** data issues #4 #5 #6 #17 need the Algeria Fire Map export and a laptop run (Electronics); #8 #11 need humans (design, translations).
 
@@ -59,6 +59,7 @@ entries short and factual. Use absolute dates (YYYY-MM-DD).
 | D-08 | 2026-11-20 | Dashboard in React + TypeScript, with FastAPI integrating the AI (spec v0.3.1) | Owner |
 | D-10 | 2026-11-20 | A manual `POST /alerts` is sent at once (the operator's click is the approval). Cancel applies only to sent alerts; a pending flag is rejected instead. The audit log records when, not who (one shared token) | #36 |
 | D-11 | 2026-11-20 | #25 (approval queue) and #10 (phone page) start before the design mockups (#8): built from SPEC §6 with plain styling, restyled later | Owner, to get flag → approve → phone working sooner |
+| D-12 | 2026-11-20 | Wave 3 builds #12 #21 #28 #29 against stub/fixture data (current placeholder texts, stub scoreboard, stub detections and risk cells, flagged `stub`); real data from #11 #4 #5 #19 #27 drops in later with no code change | Owner, nothing was unblocked |
 | D-09 | 2026-11-20 | If `OPERATOR_TOKEN` is unset, write endpoints stay open and log a warning (dev mode). If it is set, the header is required (401 otherwise). The demo sets it | Wave 1 seam, coordinator default |
 
 ### 3.2 Open (waiting on the owner)
