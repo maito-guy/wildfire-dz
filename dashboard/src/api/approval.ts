@@ -87,3 +87,8 @@ export function langsOf(texts: Record<string, string>): { code: string; name: st
     .map((code) => ({ code, name: code, rtl: false }));
   return [...known, ...other];
 }
+
+/** The known languages with no text in this alert yet (no checked translation in alert/texts.json). */
+export function missingLangs(texts: Record<string, string>): { code: string; name: string; rtl: boolean }[] {
+  return LANGS.filter((l) => !texts[l.code]);
+}

@@ -5,6 +5,7 @@ const params = new URLSearchParams(location.search);
 const VILLAGE = params.get("village");
 const ORDER = ["ary", "kab", "ar", "fr", "en"];          // display order after the phone's chosen language
 const RTL = ["ar", "ary"];
+const FALLBACK = ["fr", "en"];                            // chosen language missing -> French, then English
 const NAMES = { ary: "Darija", kab: "Taqbaylit", ar: "العربية", fr: "Français", en: "English" };
 const LEVEL_WORDS = {
   leave_now: ["EXTREME ALERT", "LEAVE NOW"],
@@ -74,6 +75,7 @@ $("armBtn").onclick = async () => {
   try { await document.documentElement.requestFullscreen?.({ navigationUI: "hide" }); } catch (_) { /* optional */ }
   await requestWakeLock();
   armed = true;
+  saveLang(lang);                                        // keep the default too, if it was never changed
   show("idle");
 };
 
@@ -145,9 +147,9 @@ function render({ alert: a, cancelled }) {
     h.textContent = `The earlier "${was}" message was cancelled. Follow instructions from Civil Protection.`;
     h.removeAttribute("dir"); h.lang = "en";
   } else {
-    const hl = head[lang] ? lang : "en";
-    h.textContent = head[hl] || "";
-    h.lang = hl; h.dir = RTL.includes(hl) ? "rtl" : "ltr";
+    const hl = firstLang(Object.keys(head).filter((l) => head[l]));
+    h.textContent = hl ? head[hl] : "";
+    h.lang = hl || "en"; h.dir = RTL.includes(hl) ? "rtl" : "ltr";
   }
   $("village").textContent = a.village_name || "";
 
@@ -176,8 +178,7 @@ function render({ alert: a, cancelled }) {
   box.textContent = "";
   if (!cancelled) {
     const names = texts?.language_names || NAMES;
-    const langs = Object.keys(a.texts || {}).filter((l) => a.texts[l]);
-    langs.sort((x, y) => rank(x) - rank(y));
+    const langs = orderLangs(Object.keys(a.texts || {}).filter((l) => a.texts[l]));
     langs.forEach((l) => {
       const p = document.createElement("p");
       p.className = "msg"; p.lang = l; p.dir = RTL.includes(l) ? "rtl" : "ltr";
@@ -190,7 +191,18 @@ function render({ alert: a, cancelled }) {
   $("dismissBtn").textContent = cancelled ? "OK" : "Dismiss";
 }
 
-function rank(l) { return l === lang ? -1 : (ORDER.indexOf(l) + 1 || ORDER.length + 1); }
+// Every language the server sent is shown. The first block is the phone's chosen language, or, when the
+// alert has no text in it yet, French, then English. The other blocks follow ORDER (unknown codes last).
+function firstLang(avail) {
+  return [lang, ...FALLBACK].find((l) => avail.includes(l)) || orderLangs(avail, false)[0];
+}
+function orderLangs(avail, chosenFirst = true) {
+  const pos = (l) => (ORDER.indexOf(l) + 1 || ORDER.length + 1);
+  const sorted = [...avail].sort((x, y) => pos(x) - pos(y));
+  if (!chosenFirst || !sorted.length) return sorted;
+  const first = firstLang(sorted);
+  return [first, ...sorted.filter((l) => l !== first)];
+}
 
 function ageText(m) {
   if (m == null) return "";

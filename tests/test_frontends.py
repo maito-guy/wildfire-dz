@@ -73,3 +73,17 @@ def test_alert_page_fits_a_phone():
     assert 'name="viewport"' in html and "width=device-width" in html
     assert "overflow-x: hidden" in css
     assert "font: 18px" in css  # body text at least 18 px
+
+
+def test_alert_page_language_fallback_french_then_english():
+    js = read("alert/alert.js")
+    assert 'FALLBACK = ["fr", "en"]' in js
+    assert "[lang, ...FALLBACK]" in js  # chosen language, else French, else English
+    assert 'p.dir = RTL.includes(l) ? "rtl" : "ltr"' in js  # direction per text block
+    assert "localStorage.setItem(LANG_KEY" in js
+
+
+def test_dashboard_preview_shows_every_language():
+    card = read("dashboard/src/components/ApprovalCard.tsx")
+    assert "langs.map((l) =>" in card and 'dir={l.rtl ? "rtl" : "ltr"}' in card
+    assert "missingLangs" in card
