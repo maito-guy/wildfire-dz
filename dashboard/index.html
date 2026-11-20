@@ -1,45 +1,13 @@
 <!doctype html>
 <html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Civil Protection — wildfire early warning</title>
-  <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
-  <link rel="stylesheet" href="style.css">
-</head>
-<body>
-  <header>
-    <strong>Wildfire early warning · northern Algeria</strong>
-    <span id="age" class="age">no data yet</span>
-    <span id="model" class="pill"></span>
-  </header>
-  <div id="stale" class="stale hidden">Newest satellite data is more than 3 h old. Zones may be out of date.</div>
-  <main>
-    <div id="map"></div>
-    <aside>
-      <section class="controls">
-        <div class="row">
-          <label>Replay <select id="fire"></select></label>
-          <button id="prev">◀</button><button id="next">▶</button><button id="play">Play</button>
-        </div>
-        <div class="row small" id="passInfo">—</div>
-        <div class="row">
-          <button id="startMode">Start a fire here</button>
-          <label>Wind <input id="windKmh" type="number" value="30" min="0" max="150"> km/h</label>
-          <label>from <input id="windFrom" type="number" value="270" min="0" max="359">°</label>
-        </div>
-        <div class="row small">
-          <label><input type="checkbox" id="showTruth" checked> show what really burned next pass</label>
-          <button id="reset" class="ghost">Reset demo</button>
-        </div>
-      </section>
-      <h3>Villages <span class="small">(most urgent first)</span></h3>
-      <ol id="villages"></ol>
-      <h3>Alerts sent</h3>
-      <ol id="alerts"></ol>
-    </aside>
-  </main>
-  <script src="vendor/leaflet/leaflet.js"></script>
-  <script src="app.js"></script>
-</body>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" href="data:," />
+    <title>Civil Protection — wildfire early warning</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
 </html>
