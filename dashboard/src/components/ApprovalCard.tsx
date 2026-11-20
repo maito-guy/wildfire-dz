@@ -91,9 +91,11 @@ export function ApprovalCard({ alert: a, selected, onSelect, onApprove, onReject
         <span className="aq-minutes">{minutesText(a)}</span>
       </button>
       <div className="aq-facts small">
-        {a.distance_km.toFixed(1)} km from the fire · fire to the {a.fire_direction} · leave toward{" "}
-        {a.leave_toward} · {fmtAge(a.data_age_min)} · {SOURCE_WORD[a.source]} · radius {a.area.radius_km} km ·
-        pending approval{selected ? " · shown on the map" : ""}
+        {a.level === "preventive"
+          ? `fire risk for ${a.scenario_time.slice(0, 10)} (no fire yet)`
+          : `${a.distance_km.toFixed(1)} km from the fire · fire to the ${a.fire_direction} · leave toward ${a.leave_toward} · ${fmtAge(a.data_age_min)}`}{" "}
+        · {SOURCE_WORD[a.source]} · radius {a.area.radius_km} km · pending approval
+        {selected ? " · shown on the map" : ""}
       </div>
 
       {mode !== "edit" && shown && (

@@ -10,6 +10,7 @@ paths:
   history_grid: data/out/history_grid.parquet  # pre-aggregated fire history (#29); else built from detections, else stub
   artifacts: model/artifacts               # model_c.txt, thresholds.json, scoreboard.json, features.json
   alert_texts: alert/texts.json
+  risk_today: model/artifacts/risk_today.parquet  # daily risk cells from model.risk (#27, docs/contracts.md); stub cells if missing
 
 scope:
   lat_min: 34.5                            # northern Algeria only
@@ -108,6 +109,18 @@ cap:                                       # CAP 1.2 message for the simulated c
   identifier_prefix: "DZ.WILDFIRE"
   status: Exercise                         # Actual only for a real deployment
 
+risk:                                      # today's risk layer and preventive flags (api/risk.py, #28)
+  display_cell_deg: 0.05                   # cells are merged to this lattice for the map (max score per cell)
+  min_level_shown: moderate                # cells below this level are not sent to the map
+  flag_level: very_high                    # places near a cell at this level get a preventive flag
+  place_radius_km: 5                       # a place is "near" a very-high cell within this distance
+  max_flags: 10                            # at most this many preventive flags per day (highest score first)
+  min_flag_spacing_km: 15                  # flagged places are at least this far apart (one per hot area)
+  stub_step_deg: 0.05                      # STUB lattice when risk_today.parquet is missing (not real data)
+  levels:                                  # score -> level, used only for the stub (the real file carries its level)
+    moderate: 0.3                          # PLACEHOLDER
+    high: 0.55                             # PLACEHOLDER
+    very_high: 0.8                         # PLACEHOLDER
 fire_map:                                  # GET /detections and GET /history (api/detections.py, #29)
   default_hours: 168                       # /detections without `since`: the 7 days before the newest detection
   max_points: 20000                        # newest first; the response says `truncated` when more matched

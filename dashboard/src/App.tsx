@@ -4,6 +4,7 @@ import { LayersControl } from "react-leaflet";
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 import type { LatLon, PredictResponse, Replay, Village } from "./api/client";
 import { api, ApiError } from "./api/client";
+import { fetchRisk, RISK_KEY } from "./api/risk";
 import { AlertLog } from "./components/AlertLog";
 import { ApprovalQueue } from "./components/ApprovalQueue";
 import type { WindInput } from "./components/Controls";
@@ -13,6 +14,8 @@ import { FireMap } from "./components/FireMap";
 import { useFireData } from "./api/fireMap";
 import { FireLayers, FireLegend } from "./components/FireLayers";
 import { Header } from "./components/Header";
+import { RiskLayer } from "./components/RiskLayer";
+import { RiskPanel } from "./components/RiskPanel";
 import { Scoreboard } from "./components/Scoreboard";
 import { Settings } from "./components/Settings";
 import { VillageList } from "./components/VillageList";
@@ -22,6 +25,7 @@ import { useLiveEvents } from "./hooks/useEventSource";
 const POLL_MS = 3000; // refresh villages/alerts while a fire is active
 const HEALTH_MS = 5000; // phones/dashboards connected, pending alerts
 const PLAY_MS = 2500; // one replay pass every 2.5 s
+const RISK_MS = 60_000; // today's risk; reading it also (re)creates the day's preventive flags
 
 function errorText(e: unknown): string {
   if (e instanceof ApiError && e.status === 401) {
@@ -61,6 +65,7 @@ export default function App() {
   const [replay, setReplay] = useState<Replay | null>(null);
   const [pass, setPass] = useState(0);
   const [view, setView] = useState<MapView | null>(null);
+  const [showRisk, setShowRisk] = useState(false);
 
   // Ignore late /predict answers when a newer one was asked for (play, fast clicks).
   const predictSeq = useRef(0);
@@ -72,6 +77,7 @@ export default function App() {
   });
 
   const fires = useQuery({ queryKey: ["replays"], queryFn: api.replays });
+  const riskQ = useQuery({ queryKey: RISK_KEY, queryFn: fetchRisk, refetchInterval: RISK_MS });
   const fireData = useFireData(); // satellite detections and fire history (#29)
   const villagesQ = useQuery({
     queryKey: ["villages", fireId],
@@ -133,6 +139,7 @@ export default function App() {
       let resetError = "";
       try {
         await api.reset();
+        void queryClient.invalidateQueries({ queryKey: RISK_KEY }); // brings today's preventive flags back
       } catch (e) {
         resetError = `Reset before replay failed: ${errorText(e)}`;
       }
@@ -210,6 +217,7 @@ export default function App() {
       return;
     }
     predictSeq.current++;
+    void queryClient.invalidateQueries({ queryKey: RISK_KEY }); // brings today's preventive flags back
     setFireId(null);
     setPrediction(null);
     setBurning([]);
@@ -238,6 +246,7 @@ export default function App() {
           startMode={startMode}
           onMapClick={onMapClick}
         >
+          {showRisk && riskQ.data && <RiskLayer risk={riskQ.data} />}
           <LayersControl position="topright">
             <FireLayers
               detections={fireData.detections.data}
@@ -271,6 +280,16 @@ export default function App() {
             showTruth={showTruth}
             onShowTruth={setShowTruth}
             onReset={onReset}
+          />
+          <RiskPanel
+            risk={riskQ.data}
+            error={riskQ.error ? errorText(riskQ.error) : ""}
+            show={showRisk}
+            onShow={setShowRisk}
+            onSelect={(p) => {
+              setShowRisk(true);
+              setView((v) => ({ center: [p.lat, p.lon], zoom: 11, seq: (v?.seq ?? 0) + 1 }));
+            }}
           />
           <ApprovalQueue
             live={live.state}

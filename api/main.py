@@ -260,6 +260,20 @@ async def reset():
     return {"ok": True}
 
 
+# ---- today's risk layer (#28) ------------------------------------------------------------------
+from api import risk  # noqa: E402
+from api.schemas import RiskResponse  # noqa: E402
+
+
+@app.get("/risk", response_model=RiskResponse)
+async def risk_today():
+    """Today's risk cells (simplified) and very-high-risk places; creates their preventive flags once a day."""
+    try:
+        return risk.today()
+    except ValueError as e:  # malformed risk file: say so instead of a bare 500
+        raise HTTPException(500, str(e)) from e
+
+
 @app.get("/")
 async def root():
     return RedirectResponse("/dashboard/")

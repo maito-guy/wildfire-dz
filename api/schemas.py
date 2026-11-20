@@ -120,6 +120,40 @@ class AlertReject(BaseModel):
     reason: str = Field(min_length=1)
 
 
+# ---- today's risk layer (#28, docs/contracts.md GET /risk) -------------------------------------
+RiskLevel = Literal["low", "moderate", "high", "very_high"]
+
+
+class RiskCell(BaseModel):
+    lat: float                                 # centre of a display cell (risk.display_cell_deg)
+    lon: float
+    score: float                               # 0-1, highest score among the merged 375 m cells
+    level: RiskLevel
+
+
+class RiskPlace(BaseModel):
+    id: str
+    name: str
+    lat: float
+    lon: float
+    distance_km: float                         # to the very-high cell
+    score: float
+    level: RiskLevel
+    top_factors: list[str]                     # e.g. ["wind", "dryness", "past fires"]
+    alert_id: str                              # its preventive flag in the approval queue
+    alert_status: AlertStatus
+
+
+class RiskResponse(BaseModel):
+    date: str                                  # YYYY-MM-DD, the day the risk is for
+    stub: bool                                 # true = fake cells, risk_today.parquet is missing
+    generated_at: datetime | None              # when the risk file was written (null for the stub)
+    cell_deg: float                            # display cell size in degrees (square in lat/lon)
+    flag_level: RiskLevel                      # places near cells at this level are flagged
+    cells: list[RiskCell]                      # levels >= risk.min_level_shown, highest score first
+    places: list[RiskPlace]                    # flagged places, highest score first
+
+
 # --- Fire map (#29): GET /detections, GET /history ---------------------------------------------------
 class Detection(BaseModel):
     lat: float
