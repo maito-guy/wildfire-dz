@@ -12,7 +12,7 @@ entries short and factual. Use absolute dates (YYYY-MM-DD).
 ## 1. Current state
 
 - **Phase:** delivery (`RULES.md`, `PROJECT_MANAGEMENT_RULES.md` §9–13). Spec: `SPEC.md` v0.3.1.
-- **Running:** wave 2: agents on #39 Turborepo, #15 status bar, #25 approval queue UI, #10 phone page (worktrees `.claude/worktrees/{39,15,25,10}`). Next: #40 Docker after #39.
+- **Running:** wave 2 agents on #25 approval queue UI, #10 phone page, #40 Docker (worktrees `.claude/worktrees/{25,10,40}`). Merged in wave 2: #15 (PR #41), #39 (PR #42).
 - **Next up:** merge #39, run #40. Then #15 (dashboard status bar) and #25/#10 once design #8 lands.
 - **Blockers:** data issues #4 #5 #6 #17 need the Algeria Fire Map export and a laptop run (Electronics); #8 #11 need humans (design, translations).
 
@@ -36,6 +36,8 @@ entries short and factual. Use absolute dates (YYYY-MM-DD).
 | C-12 | `AlertStore.flag(fire_id, v, level, source, scenario_time, data_age_min)` is the single entry point for AI flags. Risk flags (#28) use `source="ai_risk"`, `level="preventive"` | #36 |
 | C-14 | Dashboard write calls send `X-Operator-Token` from `localStorage["operatorToken"]` (Settings panel) | #38 |
 | C-15 | CAP settings live in `config.yaml → cap`. The demo uses status `Exercise`; `Actual` only for a real deployment. CAP is built with the stdlib; `lxml` is test-only (XSD in `api/tests/data/`). A Cancel has its own identifier `<prefix>.<id>.cancel` and `references` the original. A CAP failure is logged and never blocks the phones | #37 |
+| C-16 | Monorepo with npm workspaces (`dashboard` = `wildfire-dashboard`, `api` = `@wildfire/api`) and one root lockfile. `npm ci` at the root; `npx turbo dev` (or `make dev`) runs the API on :8000 and the dashboard on :5173; `npx turbo lint typecheck test build` runs every check with caching. `.venv` must exist first. Add dashboard packages with `npm install <pkg> --workspace dashboard` | #42 |
+| C-17 | The dashboard polls `GET /health` every 5 s (10 s fetch timeout); unreachable is shown in words. `/health` and `/replay` are typed by hand in `src/api/client.ts` (no `response_model`). The alert log time is the last status change; sent and cancelled rows link to `cap.xml` | #41 |
 | C-13 | `/predict` wind: request → Open-Meteo forecast (within `forecast.past_days` = 10 days) → ERA5 archive (older) → `weather_default`. Cached per (lat, lon, hour) for 15 min; failures are not cached | #35 |
 
 ---
@@ -80,6 +82,7 @@ entries short and factual. Use absolute dates (YYYY-MM-DD).
 
 ## 5. Milestone log
 
+- 2026-11-20: Wave 2: #15 status bar (PR #41) and #39 Turborepo (PR #42) merged; #25 and #10 started without mockups (D-11); #40 Docker started.
 - 2026-11-20: Wave 1 done: #26 CAP (PR #37) and #32 React dashboard (PR #38) merged. Created #39 Turborepo and #40 Docker (owner request).
 - 2026-11-20: #14 forecast wind (PR #35) and #24 approval API (PR #36) merged into dev.
 - 2026-11-20: Kit adopted; issues #1–#33 created; spec v0.3.1; delivery started with wave 1.
