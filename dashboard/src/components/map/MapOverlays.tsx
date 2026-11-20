@@ -43,7 +43,7 @@ export function MapControls({ basemap, onBasemap, layers, onLayer }: Props) {
             <ToggleGroupItem
               key={value}
               value={value}
-              className="h-8 rounded-full! px-3 text-[13px] font-semibold text-muted-foreground transition-colors duration-200 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
+              className="h-7 rounded-full! px-2.5 text-xs font-semibold text-muted-foreground transition-colors duration-200 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
             >
               <Icon weight="bold" aria-hidden="true" />
               {label}
@@ -64,12 +64,12 @@ export function MapControls({ basemap, onBasemap, layers, onLayer }: Props) {
         </Button>
       </div>
       {open && (
-        <section className={floating("animate-in-up w-60 p-3")} aria-label="Layers">
+        <section className={floating("animate-in-up w-52 p-2.5")} aria-label="Layers">
           <p className="label-mono mb-1.5">Layers</p>
           {GROUPS.map((g) => {
             const id = `layer-${g.keys[0]}`;
             return (
-              <label key={g.label} htmlFor={id} className="flex min-h-8 cursor-pointer items-center gap-2.5 text-[13px]">
+              <label key={g.label} htmlFor={id} className="flex min-h-7 cursor-pointer items-center gap-2 text-xs">
                 <span className="size-2.5 shrink-0 rounded-full" style={{ background: g.color }} aria-hidden="true" />
                 <span className="flex-1">{g.label}</span>
                 <Switch id={id} checked={layers[g.keys[0]]} onCheckedChange={(v) => g.keys.forEach((k) => onLayer(k, v))} />

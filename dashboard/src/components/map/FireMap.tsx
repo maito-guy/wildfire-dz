@@ -32,7 +32,7 @@ export type LayerKey =
 
 export type LayerVisibility = Record<LayerKey, boolean>;
 
-/** Map view picked by the operator: heat (dark + fire heatmap), 3d (relief, tilted), normal (follows the theme). */
+/** Map view picked by the operator: heat (dark + fire heatmap), 3d (satellite on terrain, tilted), normal (street map). */
 export type Basemap = "heat" | "3d" | "normal";
 
 export interface MapView {
@@ -53,8 +53,6 @@ interface Props {
   layers: LayerVisibility;
   view: MapView | null;
   basemap: Basemap;
-  /** Dark theme: the Normal map turns dark too. */
-  dark: boolean;
   demo: boolean; // a click starts a fire
   onMapClick: (p: LatLon) => void;
   /** Overlay cards (layers, weather, hint), positioned by their own classes. */
@@ -64,30 +62,66 @@ interface Props {
 maplibregl.setWorkerUrl(workerUrl);
 
 const HOME: [number, number] = [4.1, 36.6]; // lon, lat
-// One style per view: OpenFreeMap first, CARTO if it is slow or down, plain land if both fail (offline).
-type StyleKey = "dark" | "light" | "relief";
-const STYLES: Record<StyleKey, string[]> = {
+// One style per view. Vector styles: OpenFreeMap first, CARTO if it is slow or down, plain land if both fail (offline).
+// "streets" is the detailed Google-Maps-like map (land cover, roads by class, places, POIs, buildings).
+type StyleKey = "dark" | "streets" | "satellite";
+const STYLES: Record<Exclude<StyleKey, "satellite">, string[]> = {
   dark: ["https://tiles.openfreemap.org/styles/dark", "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json"],
-  relief: ["https://tiles.openfreemap.org/styles/liberty", "https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json"],
-  light: ["https://tiles.openfreemap.org/styles/positron", "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json"],
+  streets: ["https://tiles.openfreemap.org/styles/liberty", "https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json"],
 };
 
-/** Heatmap is always on a dark map (the heat reads best there); 3D uses relief; Normal follows the theme. */
-function styleKey(b: Basemap, dark: boolean): StyleKey {
+/** Heatmap is always on a dark map (the heat reads best there); 3D is satellite imagery; Normal is the street map. */
+function styleKey(b: Basemap): StyleKey {
   if (b === "heat") return "dark";
-  if (b === "3d") return "relief";
-  return dark ? "dark" : "light";
+  if (b === "3d") return "satellite";
+  return "streets";
 }
 // Terrain for the 3D map (AWS open elevation tiles, Terrarium encoding).
 const DEM_TILES = "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png";
 const STYLE_TIMEOUT_MS = 5000;
+const ESRI = "https://server.arcgisonline.com/ArcGIS/rest/services";
+
+/** Satellite imagery with place names and borders on top, plus a sky for the tilted view. Built inline: no style download. */
+const SATELLITE_STYLE: StyleSpecification = {
+  version: 8,
+  sources: {
+    imagery: {
+      type: "raster",
+      tiles: [`${ESRI}/World_Imagery/MapServer/tile/{z}/{y}/{x}`],
+      tileSize: 256,
+      maxzoom: 19,
+      attribution: "Imagery © Esri, Maxar, Earthstar Geographics",
+    },
+    labels: {
+      type: "raster",
+      tiles: [`${ESRI}/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}`],
+      tileSize: 256,
+      maxzoom: 19,
+    },
+  },
+  layers: [
+    { id: "background", type: "background", paint: { "background-color": "#1d2a22" } },
+    { id: "imagery", type: "raster", source: "imagery", paint: { "raster-saturation": 0.1, "raster-contrast": 0.05 } },
+    { id: "labels", type: "raster", source: "labels" },
+  ],
+  sky: {
+    "sky-color": "#7fb2e5",
+    "horizon-color": "#dbe8f5",
+    "fog-color": "#dbe8f5",
+    "sky-horizon-blend": 0.6,
+    "horizon-fog-blend": 0.7,
+    "fog-ground-blend": 0.35,
+    "atmosphere-blend": ["interpolate", ["linear"], ["zoom"], 0, 1, 12, 0],
+  },
+};
 
 function offlineStyle(key: StyleKey): StyleSpecification {
-  const color = key === "dark" ? "#1d1f22" : mapColors.land;
+  const color = key === "streets" ? mapColors.land : "#1d1f22";
   return { version: 8, sources: {}, layers: [{ id: "background", type: "background", paint: { "background-color": color } }] };
 }
 
 async function loadStyle(key: StyleKey): Promise<string | StyleSpecification> {
+  if (key === "satellite") return SATELLITE_STYLE;
   for (const url of STYLES[key]) {
     try {
       const ctl = new AbortController();
@@ -118,7 +152,7 @@ const PICK_PX = 8;
 
 function addLayers(map: maplibregl.Map, kind: Basemap, key: StyleKey) {
   // Ink lines (next pass, alert areas, dot outlines) turn light on a dark map, or they disappear.
-  const line = key === "dark" ? mapColors.inkOnDark : mapColors.ink;
+  const line = key === "streets" ? mapColors.ink : mapColors.inkOnDark;
   const src = (id: string) => map.addSource(id, { type: "geojson", data: geo.EMPTY });
   ["history", "history-pts", "risk", "zones", "burning", "next-pass", "alert-areas", "detections"].forEach(src);
 
@@ -260,8 +294,7 @@ function addLayers(map: maplibregl.Map, kind: Basemap, key: StyleKey) {
 
   if (kind === "3d") {
     map.addSource("dem", { type: "raster-dem", tiles: [DEM_TILES], encoding: "terrarium", tileSize: 256, maxzoom: 14 });
-    map.addLayer({ id: "hillshade", type: "hillshade", source: "dem", paint: { "hillshade-exaggeration": 0.5 } }, "history");
-    map.setTerrain({ source: "dem", exaggeration: 1.4 });
+    map.setTerrain({ source: "dem", exaggeration: 1.6 });
   }
 }
 
@@ -390,7 +423,7 @@ export function FireMap(p: Props) {
   const [map, setMap] = useState<maplibregl.Map | null>(null); // set once the style and our layers are in
   const [styleSeq, setStyleSeq] = useState(0); // bumps after each basemap change, so the data is set again
   const kind = useRef(p.basemap);
-  const key = useRef(styleKey(p.basemap, p.dark));
+  const key = useRef(styleKey(p.basemap));
 
   const onClick = useEffectEvent((e: MapMouseEvent) => {
     if (!map) return;
@@ -432,7 +465,8 @@ export function FireMap(p: Props) {
         style,
         center: HOME,
         zoom: 10,
-        maxZoom: 17,
+        maxZoom: 18,
+        maxPitch: 75,
         attributionControl: { compact: true, customAttribution: "Fire data NASA FIRMS" },
       });
       m.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "bottom-right");
@@ -442,7 +476,8 @@ export function FireMap(p: Props) {
       m.on("style.load", () => {
         if (!m) return;
         addLayers(m, kind.current, key.current);
-        m.easeTo({ pitch: kind.current === "3d" ? 60 : 0, duration: 800 });
+        const tilt = kind.current === "3d";
+        m.easeTo({ pitch: tilt ? 65 : 0, bearing: tilt ? -25 : 0, duration: 900 });
         setMap(m);
         setStyleSeq((n) => n + 1);
       });
@@ -457,7 +492,7 @@ export function FireMap(p: Props) {
 
   // View or theme switch: load the new style, then "style.load" adds our layers back.
   useEffect(() => {
-    const next = styleKey(p.basemap, p.dark);
+    const next = styleKey(p.basemap);
     if (!map || (kind.current === p.basemap && key.current === next)) return;
     kind.current = p.basemap;
     key.current = next;
@@ -469,7 +504,7 @@ export function FireMap(p: Props) {
     return () => {
       stale = true;
     };
-  }, [map, p.basemap, p.dark]);
+  }, [map, p.basemap]);
 
   // Data → sources.
   const setData = (id: string, data: GeoJSON.FeatureCollection) => (map?.getSource(id) as GeoJSONSource | undefined)?.setData(data);

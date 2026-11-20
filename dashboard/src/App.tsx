@@ -7,7 +7,6 @@ import type { LatLon, PredictResponse, Replay, Village } from "./api/client";
 import { api, ApiError } from "./api/client";
 import { useFireData } from "./api/fireMap";
 import { fetchRisk, RISK_KEY } from "./api/risk";
-import { AlertLog } from "./components/AlertLog";
 import { ApprovalQueue } from "./components/ApprovalQueue";
 import type { WindInput } from "./components/Controls";
 import { Controls } from "./components/Controls";
@@ -335,15 +334,14 @@ export default function App() {
           layers={layers}
           view={view}
           basemap={basemap}
-          dark={theme === "dark"}
           demo={appMode === "demo"}
           onMapClick={onMapClick}
         />
       </Suspense>
 
       {/* Phone: one column (bar, status, panel at the bottom). Desktop: work column left, map tools right. */}
-      <div className="pointer-events-none absolute inset-3 z-20 flex flex-col gap-2 pb-[env(safe-area-inset-bottom)] lg:inset-4 lg:flex-row lg:items-start lg:justify-between lg:gap-4">
-        <div className="contents lg:flex lg:h-full lg:w-[420px] lg:shrink-0 lg:flex-col lg:gap-3">
+      <div className="pointer-events-none absolute inset-3 z-20 flex flex-col gap-2 pb-[env(safe-area-inset-bottom)] lg:inset-3 lg:flex-row lg:items-start lg:justify-between lg:gap-3">
+        <div className="contents lg:flex lg:h-full lg:w-[360px] lg:shrink-0 lg:flex-col lg:gap-2">
           <div className="order-1 lg:order-none">
             <ModeBar mode={appMode} onMode={changeMode} theme={theme}>
               <Controls
@@ -376,7 +374,7 @@ export default function App() {
           >
             <Tabs value={tab} onValueChange={openTab} className="flex min-h-0 flex-1 flex-col gap-0">
               <div className="flex items-center gap-1 p-2">
-                <TabsList className="grid h-9 flex-1 grid-cols-3 rounded-[10px] bg-secondary p-[3px]">
+                <TabsList className="grid h-8 flex-1 grid-cols-3 rounded-[10px] bg-secondary p-[3px]">
                   <TabsTrigger value="villages" onClick={() => reopen("villages")}>
                     Villages
                   </TabsTrigger>
@@ -412,7 +410,6 @@ export default function App() {
                       onCancel={onCancel}
                       onFocus={(v) => focus(v.lat, v.lon, 13)}
                     />
-                    <AlertLog alerts={alerts} />
                   </TabsContent>
                   <TabsContent value="approval" className="flex min-h-0 flex-1 flex-col">
                     <ApprovalQueue live={live.state} onSelect={(a) => focus(a.area.lat, a.area.lon, 13)} />

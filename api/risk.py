@@ -16,7 +16,7 @@ from functools import lru_cache
 import numpy as np
 import pandas as pd
 
-from api import impact
+from api import impact, stub_places
 from api.alerts import store
 from core import geo
 from core.config import load_config, repo_path
@@ -34,6 +34,13 @@ _HOT = [  # (lat, lon, strength, width_deg)
     (36.75, 8.20, 0.65, 0.30),   # El Tarf
     (36.05, 1.60, 0.50, 0.35),   # Ouarsenis
     (34.95, -1.30, 0.45, 0.30),  # Tlemcen
+    (36.72, 5.05, 0.55, 0.20),   # Bejaia
+    (36.88, 6.90, 0.55, 0.22),   # Skikda
+    (36.45, 7.45, 0.50, 0.20),   # Guelma
+    (36.55, 2.45, 0.45, 0.18),   # Tipaza / Cherchell
+    (36.30, 2.75, 0.45, 0.20),   # Medea / Blida atlas
+    (36.20, 8.00, 0.40, 0.20),   # Souk Ahras
+    (35.40, 0.15, 0.35, 0.25),   # Mascara
 ]
 _FACTORS = ("wind", "dryness", "past fires", "heat", "forest fuel")
 
@@ -78,12 +85,19 @@ def stub_cells(cfg: dict, date: str) -> pd.DataFrame:
     la, lo = la.ravel(), lo.ravel()
     land = la <= np.interp(lo, _COAST_LON, _COAST_LAT) - step / 2
     la, lo = la[land], lo[land]
+    # Same day, same map; a new day moves things a little. Value noise breaks the grid and the round blobs.
+    seed = int(date.replace("-", "")) % 9973
+    rough = stub_places.fractal_noise(la, lo, seed)
+    patch = stub_places.fractal_noise(la, lo, seed + 50)  # forest vs bare land
     past = sum(s * np.exp(-((la - a) ** 2 + (lo - b) ** 2) / (2 * w * w)) for a, b, s, w in _HOT)
-    wind = 0.5 + 0.5 * np.sin(lo * 1.7 + 0.3)
+    past = past * (0.55 + 0.9 * rough)
+    wind = 0.5 + 0.5 * np.sin(lo * 1.7 + 0.3 + seed % 7)
     dry = 0.5 + 0.5 * np.cos(la * 2.3)
     heat = 0.5 + 0.5 * np.sin(la * 1.1 + lo * 0.7)
-    fuel = np.clip(1.4 * (la - lat_min) / (max(_COAST_LAT) - lat_min), 0, 1)
-    score = np.clip(0.08 + past + 0.08 * wind + 0.06 * dry + 0.04 * heat + 0.06 * fuel - 0.06, 0, 0.99)
+    fuel = np.clip(1.4 * (la - lat_min) / (max(_COAST_LAT) - lat_min), 0, 1) * (0.4 + 0.9 * patch)
+    jitter = stub_places.hash01(np.round(la / step).astype(np.int64), np.round(lo / step).astype(np.int64), seed)
+    score = np.clip(0.02 + past + 0.10 * wind + 0.06 * dry + 0.04 * heat + 0.14 * fuel
+                    + 0.18 * (rough - 0.5) + 0.06 * (jitter - 0.5), 0, 0.99)
     contrib = np.stack([0.08 * wind, 0.06 * dry, past, 0.04 * heat, 0.06 * fuel], axis=1)
     order = np.argsort(-contrib, axis=1)[:, :3]
     return pd.DataFrame({"date": date, "lat": np.round(la, 5), "lon": np.round(lo, 5),
@@ -128,8 +142,9 @@ def flagged_places(cells: pd.DataFrame, cfg: dict) -> list[dict]:
     places = impact.real_places()
     out: list[dict] = []
     if places is None:  # STUB: one fake place at the centre of each very-high cell
-        for c in hot.itertuples(index=False):
-            out.append({"id": f"stub-risk:{c.ix}_{c.jx}", "name": f"STUB place {c.lat:.2f}N {c.lon:.2f}E",
+        stub_names = stub_places.names(hot["ix"].to_numpy(), hot["jx"].to_numpy())
+        for c, name in zip(hot.itertuples(index=False), stub_names):
+            out.append({"id": f"stub-risk:{c.ix}_{c.jx}", "name": name,
                         "lat": float(c.lat), "lon": float(c.lon), "distance_km": 0.0, "score": float(c.score),
                         "level": str(c.level), "top_factors": list(c.top_factors)})
     else:

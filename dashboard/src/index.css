@@ -172,6 +172,12 @@
   #root {
     height: 100%;
   }
+  /* Desktop: everything sized in rem is ~8% smaller, so the floating panels leave more room for the map. */
+  @media (min-width: 1024px) {
+    html {
+      font-size: 14.75px;
+    }
+  }
   body {
     @apply bg-background text-foreground font-sans antialiased;
   }

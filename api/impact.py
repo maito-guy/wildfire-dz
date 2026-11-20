@@ -6,11 +6,13 @@ from functools import lru_cache
 import numpy as np
 import pandas as pd
 
+from api import stub_places
 from api.predictor import arrival_at
 from core import geo
 from core.config import load_config, repo_path
 
 STUB_STEP_DEG = 0.03  # ~3 km lattice of fake villages when the real places file is missing
+STUB_KEEP = 0.55      # share of lattice cells that hold a fake village (the rest is forest, fields, ravines)
 
 
 @lru_cache(maxsize=1)
@@ -32,10 +34,15 @@ def places_near(lat: np.ndarray, lon: np.ndarray, radius_km: float) -> pd.DataFr
         i = np.arange(np.floor(lat_min / STUB_STEP_DEG), np.ceil(lat_max / STUB_STEP_DEG))
         j = np.arange(np.floor(lon_min / STUB_STEP_DEG), np.ceil(lon_max / STUB_STEP_DEG))
         ii, jj = np.meshgrid(i, j)
-        ii, jj = ii.ravel().astype(int), jj.ravel().astype(int)
+        ii, jj = ii.ravel().astype(np.int64), jj.ravel().astype(np.int64)
+        keep = stub_places.hash01(ii, jj, 1) < STUB_KEEP
+        ii, jj = ii[keep], jj[keep]
+        # Scattered inside each cell, so the villages do not sit on a visible grid.
+        lat = (ii + 0.5 + 0.8 * (stub_places.hash01(ii, jj, 2) - 0.5)) * STUB_STEP_DEG
+        lon = (jj + 0.5 + 0.8 * (stub_places.hash01(ii, jj, 3) - 0.5)) * STUB_STEP_DEG
         return pd.DataFrame({"id": [f"stub:{a}_{b}" for a, b in zip(ii, jj)],
-                             "name": [f"Stub village {a % 1000}-{b % 1000}" for a, b in zip(ii, jj)],
-                             "lat": ii * STUB_STEP_DEG, "lon": jj * STUB_STEP_DEG})
+                             "name": stub_places.names(ii, jj),
+                             "lat": lat, "lon": lon})
     return df[df.lat.between(lat_min, lat_max) & df.lon.between(lon_min, lon_max)]
 
 

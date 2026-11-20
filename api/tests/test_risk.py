@@ -51,7 +51,7 @@ def test_stub_when_file_missing(cfg):
     assert {c["level"] for c in j["cells"]} <= {"moderate", "high", "very_high"}  # low is not sent
     assert any(c["level"] == "very_high" for c in j["cells"])
     assert 0 < len(j["places"]) <= cfg["risk"]["max_flags"]
-    assert all(p["name"].startswith("STUB") and p["top_factors"] for p in j["places"])
+    assert all(p["id"].startswith("stub-risk:") and p["name"] and p["top_factors"] for p in j["places"])
 
 
 def test_stub_is_deterministic(cfg):
