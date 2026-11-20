@@ -32,3 +32,7 @@ __pycache__/
 
 # AI workflow kit: parallel agent worktrees
 .claude/worktrees/
+
+# dashboard (npm)
+dashboard/node_modules/
+dashboard/dist/
