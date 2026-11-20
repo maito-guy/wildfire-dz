@@ -45,7 +45,7 @@ class PredictResponse(BaseModel):
     data_age_min: int
     data_stale: bool
     wind: Wind
-    wind_source: Literal["request", "forecast", "config_default"]
+    wind_source: Literal["request", "forecast", "reanalysis", "config_default"]
     embers_applied: bool
     zones: dict[str, Any]                      # GeoJSON FeatureCollection, properties.horizon_min = 60 | 120
     cells: list[Cell]                          # every cell reached within 120 min
