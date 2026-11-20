@@ -29,3 +29,6 @@ __pycache__/
 .vscode/
 .idea/
 .DS_Store
+
+# AI workflow kit: parallel agent worktrees
+.claude/worktrees/
