@@ -7,7 +7,9 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 Status = Literal["safe", "get_ready", "leave_now"]
-AlertLevel = Literal["get_ready", "leave_now", "update"]
+AlertLevel = Literal["get_ready", "leave_now", "update", "preventive"]
+AlertStatus = Literal["pending", "sent", "rejected", "cancelled"]
+AlertSource = Literal["ai_spread", "ai_risk", "manual"]
 
 
 class LatLon(BaseModel):
@@ -45,7 +47,7 @@ class PredictResponse(BaseModel):
     data_age_min: int
     data_stale: bool
     wind: Wind
-    wind_source: Literal["request", "forecast", "config_default"]
+    wind_source: Literal["request", "forecast", "reanalysis", "config_default"]
     embers_applied: bool
     zones: dict[str, Any]                      # GeoJSON FeatureCollection, properties.horizon_min = 60 | 120
     cells: list[Cell]                          # every cell reached within 120 min
@@ -85,11 +87,15 @@ class Alert(BaseModel):
     village_id: str
     village_name: str
     level: AlertLevel
-    source: Literal["auto", "manual"]
-    status: Literal["sent", "cancelled"]
-    created_at: datetime                       # wall clock
+    source: AlertSource                        # ai_spread = /predict rule, ai_risk = risk job, manual = operator
+    status: AlertStatus                        # pending -> sent | rejected; sent -> cancelled
+    created_at: datetime                       # wall clock (flagged, or sent for manual alerts)
     scenario_time: datetime                    # fire clock (replay time)
+    approved_at: datetime | None = None        # operator approved (or sent a manual alert)
+    rejected_at: datetime | None = None
+    reject_reason: str | None = None
     cancelled_at: datetime | None = None
+    edited: bool = False                       # operator changed the texts before approving
     minutes_left: int | None
     distance_km: float
     fire_direction: str
@@ -103,3 +109,12 @@ class AlertCreate(BaseModel):
     village_id: str
     fire_id: str | None = None                 # default: the fire nearest the village
     level: AlertLevel = "leave_now"
+
+
+class AlertApprove(BaseModel):
+    texts: dict[str, str] | None = None        # language code -> replacement text (sets edited = true)
+    radius_km: float | None = Field(default=None, gt=0, le=50)
+
+
+class AlertReject(BaseModel):
+    reason: str = Field(min_length=1)
