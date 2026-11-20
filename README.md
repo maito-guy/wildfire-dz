@@ -17,7 +17,11 @@ make test             # all smoke tests should pass
 make api              # http://localhost:8000  → dashboard
 ```
 
-- Dashboard (Civil Protection): `http://localhost:8000/dashboard/`
+- Dashboard (Civil Protection): `http://localhost:8000/dashboard/`. Build it once first with `make dashboard-build`
+  (needs Node 22+; writes `dashboard/dist/`). Without a build, the API still starts and logs a warning.
+- Dashboard development: `make api` in one terminal, `make dashboard-dev` in another, then open
+  `http://localhost:5173/dashboard/` (Vite hot reload, API calls proxied to :8000). Checks: `npm run typecheck`,
+  `npm run lint`, `npm run build` in `dashboard/`. After changing `api/schemas.py`, run `npm run gen:api` (API running) and commit `src/api/schema.ts`.
 - Test phone alert page: `make lan-ip` prints `http://<laptop-ip>:8000/alert/`. Open it on each phone (same Wi-Fi) and tap **arm**.
 - API docs (auto): `http://localhost:8000/docs`
 
