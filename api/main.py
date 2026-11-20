@@ -8,7 +8,6 @@ import asyncio
 import datetime as dt
 import hmac
 import itertools
-import json
 import logging
 import os
 
@@ -30,7 +29,7 @@ from api.schemas import (
     PredictResponse,
     VillagesResponse,
 )
-from core.config import ROOT, load_config, repo_path
+from core.config import ROOT, load_config
 
 app = FastAPI(title="Wildfire early warning — northern Algeria", version="0.1.0")
 FIRES: dict[str, dict] = {}          # fire_id -> latest prediction state (in memory, demo only)
@@ -248,11 +247,8 @@ def get_history():
 
 @app.get("/scoreboard")
 async def scoreboard():
-    p = repo_path(load_config()["paths"]["artifacts"]) / "scoreboard.json"
-    if p.exists():
-        return json.loads(p.read_text())
-    return {"status": "not measured yet", "weather_note": "Weather is ERA5 reanalysis (a perfect forecast).",
-            "fires": []}
+    # model/artifacts/scoreboard.json, or a stub of the same shape flagged stub=true (api/scoreboard.py)
+    return scoreboard_file.load()
 
 
 @app.post("/reset", dependencies=[Depends(require_operator)])

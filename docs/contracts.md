@@ -324,7 +324,9 @@ That is the stub answer. Once `replay_passes.parquet` exists, there is one entry
 The dashboard posts each pass to `/predict` (`time = observed_at = t`) and draws the **next** pass as "what really burned".
 
 ### `GET /scoreboard` *(added v0.1)*
-Serves `model/artifacts/scoreboard.json`. Before the first evaluation it returns `{"status": "not measured yet", ...}`.
+Serves `model/artifacts/scoreboard.json` as is. Before the first evaluation it serves a stub of the same shape
+with `"stub": true`, `"status": "not measured yet"`, one entry per `config.yaml → holdouts` and every metric `null`
+(`api/scoreboard.py`). The dashboard shows `null` or a missing key as "not measured".
 ```json
 {
   "generated_at": "2026-11-20T21:00:00+00:00",
@@ -341,10 +343,18 @@ Serves `model/artifacts/scoreboard.json`. Before the first evaluation it returns
        "C_dza": {"...": "same keys"}
      }}
   ],
+  "replay_counter": {"holdout": "kabylie_2021", "village": null, "model": null, "lead_min": null,
+                     "old_method": null, "old_method_lead_min": null, "status": "not measured yet"},
   "ship_c": {"rule": "C ships only if it beats B on missed villages and lead time", "decision": "not measured yet"}
 }
 ```
 (All values are `null` here on purpose. Real numbers come only from `model.evaluate`.)
+- `replay_counter` *(optional, #21)*: the counter on the replay fire, read as "`village` warned `lead_min` before
+  the fire arrived (model `model`); `old_method`: `old_method_lead_min`". `old_method` is a short label for the
+  comparison (for example how the village is warned today); minutes are integers. If the key is missing or any of
+  `village`, `lead_min`, `old_method_lead_min` is `null`, the dashboard shows "not measured".
+- Model keys are free-form (`A`, `B`, `C_<tag>`); the dashboard shows whichever are present. Extra keys
+  (`n_rows`, `n_burned_cells`) are ignored.
 
 ### `GET /detections?since=&until=` *(added v0.5, #29)*
 Satellite detections for the fire map, newest first. No token. Without `since`: the `fire_map.default_hours` (168 h)

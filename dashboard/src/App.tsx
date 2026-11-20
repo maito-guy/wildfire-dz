@@ -13,6 +13,7 @@ import { FireMap } from "./components/FireMap";
 import { useFireData } from "./api/fireMap";
 import { FireLayers, FireLegend } from "./components/FireLayers";
 import { Header } from "./components/Header";
+import { Scoreboard } from "./components/Scoreboard";
 import { Settings } from "./components/Settings";
 import { VillageList } from "./components/VillageList";
 import { sortByUrgency } from "./format";
@@ -279,6 +280,7 @@ export default function App() {
           />
           <VillageList villages={villages} busy={busy} onSend={onSend} onCancel={onCancel} />
           <AlertLog alerts={alerts} />
+          <Scoreboard />
           <Settings />
         </aside>
       </main>
