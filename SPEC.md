@@ -46,12 +46,12 @@ Out of scope: a resident app, real cell broadcast, road routing, accounts beyond
 | Data pipeline | `data/` | FIRMS, Open-Meteo ERA5, Copernicus DEM, ESA WorldCover; **Google Earth Engine** export for the planting layer | Pipeline already written. GEE layers are exported once as GeoTIFF or CSV, so the API never calls GEE live |
 | Dashboard | `dashboard/` | **React + TypeScript + Vite**, `react-leaflet` (canvas renderer for thousands of detections), `@tanstack/react-query` for REST, native `EventSource` for SSE, types generated from FastAPI's `/openapi.json` with `openapi-typescript` | Typed components for a dashboard that is growing (map layers, approval queue, risk, scoreboard, planting). Types generated from the API mean the frontend breaks at build time, not at the demo, when a contract changes. Leaflet keeps the scaffold's map logic |
 | Demo phone page | `alert/` | Static HTML + SSE + Web Audio | Imitates the cell-broadcast screen with no app. Already built |
-| Tooling | — | venv or uv, `ruff`, `pytest`; npm, `tsc --noEmit`, ESLint, `vite build`; GitHub Actions | CI must be green on every PR (Python job + dashboard job) |
+| Tooling | root `package.json`, `turbo.json` | venv or uv, `ruff`, `pytest`; npm workspaces (`dashboard`, `api`) with one root lockfile, **Turborepo** (`turbo dev` runs both, `turbo lint typecheck test build` caches every check), `tsc --noEmit`, ESLint, `vite build`; GitHub Actions | One command to run and check both stacks. CI must be green on every PR (Python job + dashboard job) |
 
 ---
 
 ### 3.1 How the dashboard and FastAPI fit together
-- **Dev:** `npm run dev` in `dashboard/` (Vite on :5173) proxies `/api/*` and the SSE streams to FastAPI on :8000. Hot reload, no CORS.
+- **Dev:** `npx turbo dev` at the repo root starts FastAPI (:8000, reload) and Vite (:5173) together; Vite proxies the API paths and the SSE streams to :8000. Hot reload, no CORS.
 - **Demo:** `npm run build` writes `dashboard/dist/`, and FastAPI serves it at `/dashboard/`. One process and one URL on the demo laptop, so phones and the projector only need the laptop's IP.
 - **Types:** `npm run gen:api` runs `openapi-typescript http://localhost:8000/openapi.json -o src/api/schema.ts`. Commit the generated file, and regenerate it whenever `api/schemas.py` changes.
 - **The phone page** `alert/` stays plain HTML and JS (one small page, no build).
