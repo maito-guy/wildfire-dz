@@ -90,7 +90,8 @@ Request:
 - `burning` **or** `polygon` (GeoJSON Polygon/MultiPolygon, sampled at 375 m).
 - `fire_id` omitted → a new id is created. `time` omitted → now. `observed_at` omitted → `time`.
 - `model`: `auto | A | B | C`. `auto` = C when shipped and wired, else B. **Fail-safe:** if C errors → B and `fallback_reason` says why.
-- `wind` omitted → forecast (P1, not wired yet) → else `config.yaml → weather_default` (`wind_source` says which).
+- `wind` omitted → Open-Meteo hourly 10 m wind at the fire centroid, at the hour nearest `time` (UTC; 3 s timeout, cached 15 min): `time` within `now - forecast.past_days` … `now + 7 days` → forecast API (`wind_source: "forecast"`); older → archive API, ERA5 (`"reanalysis"`); any error, timeout or missing value → `config.yaml → weather_default` (`"config_default"`). A request `wind` always wins (`"request"`).
+- `wind_source`: `request | forecast | reanalysis | config_default`.
 - 422 if a point is south of 34.5°N.
 
 Response 200:

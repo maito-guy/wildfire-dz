@@ -16,7 +16,7 @@ from fastapi import Body, Depends, FastAPI, Header, HTTPException, Request
 from fastapi.responses import RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
-from api import impact, predictor, replay
+from api import impact, predictor, replay, weather
 from api.alerts import LANGS, Broker, store
 from api.schemas import (
     Alert,
@@ -107,8 +107,8 @@ async def predict(req: PredictRequest):
     age = max(0, int((time - observed).total_seconds() // 60))
     if req.wind:
         wind, wind_src = req.wind.model_dump(), "request"
-    else:  # TODO(full stack): Open-Meteo forecast at the fire centroid -> wind_source="forecast"
-        wind, wind_src = dict(cfg["weather_default"]), "config_default"
+    else:  # Open-Meteo at the fire centroid; config default on any failure
+        wind, wind_src = await weather.get_wind(float(lat.mean()), float(lon.mean()), time, cfg)
     model, reason, grid = predictor.run_model(req.model, lat, lon, wind["speed_kmh"], wind["from_deg"], cfg)
 
     fire_id = req.fire_id or f"fire_{next(_fire_ids):03d}"
