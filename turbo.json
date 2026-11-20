@@ -1,0 +1,59 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "tasks": {
+    "dev": {
+      "cache": false,
+      "persistent": true
+    },
+    "build": {
+      "dependsOn": [
+        "^build"
+      ],
+      "outputs": [
+        "dist/**"
+      ]
+    },
+    "lint": {},
+    "typecheck": {},
+    "test": {},
+    "@wildfire/api#lint": {
+      "inputs": [
+        "$TURBO_ROOT$/api/**",
+        "$TURBO_ROOT$/core/**",
+        "$TURBO_ROOT$/model/**",
+        "$TURBO_ROOT$/tests/**",
+        "$TURBO_ROOT$/alert/**",
+        "$TURBO_ROOT$/config.yaml",
+        "$TURBO_ROOT$/pyproject.toml",
+        "$TURBO_ROOT$/requirements*.txt",
+        "$TURBO_ROOT$/data/*.py",
+        "$TURBO_ROOT$/.gitignore",
+        "$TURBO_ROOT$/dashboard/src/**",
+        "!$TURBO_ROOT$/**/__pycache__/**",
+        "!$TURBO_ROOT$/**/.turbo/**",
+        "!$TURBO_ROOT$/**/node_modules/**"
+      ]
+    },
+    "@wildfire/api#test": {
+      "dependsOn": [
+        "wildfire-dashboard#build"
+      ],
+      "inputs": [
+        "$TURBO_ROOT$/api/**",
+        "$TURBO_ROOT$/core/**",
+        "$TURBO_ROOT$/model/**",
+        "$TURBO_ROOT$/tests/**",
+        "$TURBO_ROOT$/alert/**",
+        "$TURBO_ROOT$/config.yaml",
+        "$TURBO_ROOT$/pyproject.toml",
+        "$TURBO_ROOT$/requirements*.txt",
+        "$TURBO_ROOT$/data/*.py",
+        "$TURBO_ROOT$/.gitignore",
+        "$TURBO_ROOT$/dashboard/src/**",
+        "!$TURBO_ROOT$/**/__pycache__/**",
+        "!$TURBO_ROOT$/**/.turbo/**",
+        "!$TURBO_ROOT$/**/node_modules/**"
+      ]
+    }
+  }
+}
