@@ -3,11 +3,12 @@
 We predict where a fire will be in 1 h and 2 h, tell each village how many minutes it has left,
 and send an emergency alert to every phone in the area (UK-style, simulated on test phones).
 
-**Source of truth:** `2-project-context.md` (project file). Contracts: [`docs/contracts.md`](docs/contracts.md).
+**Build spec (stack, owners, phases):** [`SPEC.md`](SPEC.md). **Contracts:** [`docs/contracts.md`](docs/contracts.md). **Work:** GitHub issues, labelled `phase 1|2|3` and `frontend|backend`.
 
 ## 5-minute setup
 
 Needs Python **3.11** and git. On Windows use WSL, or run the commands inside the Makefile by hand.
+No `python3.11` on your machine? `uv venv -p 3.11 .venv && uv pip install -p .venv -r requirements-dev.txt` does the same as `make setup`.
 
 ```bash
 git clone <repo-url> && cd <repo>
@@ -30,8 +31,9 @@ Frontend work can start right away. Real data drops in with no code change (see 
 | `data/` | firedata pipeline (5 scripts, kept as is) → `data/out/*.parquet` | Electronics (+ AI) |
 | `model/` | baselines A/B, LightGBM C, threshold tuning, scoreboard, export | AI |
 | `api/` | FastAPI: contract endpoints, replay, impact (minutes left), alert rules + SSE stream | Full stack |
-| `dashboard/` | Civil Protection map, vanilla JS + Leaflet (vendored, no build step) | UI/UX 2 |
-| `alert/` | full-screen phone alert page + `texts.json` (4 languages) | UI/UX 1 (texts: Commerce) |
+| `dashboard/` | Civil Protection map, vanilla JS + Leaflet (vendored, no build step) | Full stack (design: UI/UX 2) |
+| `mobile/` | **Expo React Native alert app** for Android test phones (loud on silent, keep-awake) | Full stack (design: UI/UX 1) |
+| `alert/` | web fallback phone page + `texts.json` (4 languages, read by the app too) | Full stack (texts: Commerce) |
 | `core/` | config loader + geometry shared by model and api | AI |
 | `docs/` | contracts, demo script | all |
 | `pitch/` | deck, Q&A sheet, facts | Commerce + UI/UX 2 |
@@ -52,7 +54,7 @@ reanalysis (a perfect forecast); say so wherever accuracy is quoted. No number g
 
 ## Git workflow
 
-- `main` is protected: PRs only, CI (ruff + pytest) must pass, 1 review.
+- `main`: PRs only, CI (ruff + pytest) must pass, 1 review. (Not enforced by GitHub yet: a repo admin should turn on branch protection.)
 - One branch per role: `ai`, `fullstack`, `uiux-alert`, `uiux-dashboard`, `data`, `commerce`. Keep PRs small and frequent.
 - Never commit data, `.parquet`, model artifacts or `.env`. `FIRMS_MAP_KEY` lives in `.env` only.
 - Changing `docs/contracts.md` or `api/schemas.py` needs a note in the team chat naming who it affects.
