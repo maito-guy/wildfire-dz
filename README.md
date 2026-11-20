@@ -31,9 +31,8 @@ Frontend work can start right away. Real data drops in with no code change (see 
 | `data/` | firedata pipeline (5 scripts, kept as is) → `data/out/*.parquet` | Electronics (+ AI) |
 | `model/` | baselines A/B, LightGBM C, threshold tuning, scoreboard, export | AI |
 | `api/` | FastAPI: contract endpoints, replay, impact (minutes left), alert rules + SSE stream | Full stack |
-| `dashboard/` | Civil Protection map, vanilla JS + Leaflet (vendored, no build step) | Full stack (design: UI/UX 2) |
-| `mobile/` | **Expo React Native alert app** for Android test phones (loud on silent, keep-awake) | Full stack (design: UI/UX 1) |
-| `alert/` | web fallback phone page + `texts.json` (4 languages, read by the app too) | Full stack (texts: Commerce) |
+| `dashboard/` | Civil Protection dashboard: fire map, risk layer, AI approval queue, alerts, scoreboard, planting (React + TypeScript + Vite, react-leaflet; built into `dashboard/dist/` and served by FastAPI) | Full stack (design: UI/UX 2) |
+| `alert/` | phone web page that imitates a cell-broadcast alert (demo) + `texts.json` (4 languages) | Full stack (texts: Commerce) |
 | `core/` | config loader + geometry shared by model and api | AI |
 | `docs/` | contracts, demo script | all |
 | `pitch/` | deck, Q&A sheet, facts | Commerce + UI/UX 2 |
