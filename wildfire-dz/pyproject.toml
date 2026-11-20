@@ -1,0 +1,18 @@
+[project]
+name = "wildfire-dz"
+version = "0.1.0"
+requires-python = ">=3.11,<3.12"
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests", "api/tests", "model/tests"]
+filterwarnings = ["ignore::DeprecationWarning"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+extend-exclude = ["data", "dashboard/vendor"]   # data/ = firedata pipeline kept as is
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+ignore = ["E501", "B008", "B905"]

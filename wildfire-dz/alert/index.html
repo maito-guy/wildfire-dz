@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#000000">
+  <title>Emergency alert (simulated)</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- 1. Arm screen: browsers only allow sound after a tap, so each test phone is armed once. -->
+  <section id="arm" class="screen arm">
+    <h1>Test phone</h1>
+    <p>Simulated cell broadcast. No app, no sign-up, no personal data.</p>
+    <p class="small" id="areaInfo">Receives every alert (demo).</p>
+    <button id="armBtn">Tap to arm this phone</button>
+  </section>
+
+  <!-- 2. Waiting -->
+  <section id="idle" class="screen idle hidden">
+    <div class="dot" id="conn"></div>
+    <p id="idleText">Armed. Waiting for alerts…</p>
+  </section>
+
+  <!-- 3. Full-screen alert -->
+  <section id="alert" class="screen alert hidden">
+    <div class="head">
+      <div class="icon">⚠</div>
+      <div>
+        <div id="headline" class="headline"></div>
+        <div id="meta" class="meta"></div>
+      </div>
+    </div>
+    <div id="texts" class="texts"></div>
+    <button id="ack">OK</button>
+  </section>
+
+  <script src="alert.js"></script>
+</body>
+</html>
