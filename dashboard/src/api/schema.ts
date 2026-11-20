@@ -255,6 +255,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/risk": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Risk Today
+         * @description Today's risk cells (simplified) and very-high-risk places; creates their preventive flags once a day.
+         */
+        get: operations["risk_today_risk_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/": {
         parameters: {
             query?: never;
@@ -458,6 +478,69 @@ export interface components {
             };
             /** Cells */
             cells: components["schemas"]["Cell"][];
+        };
+        /** RiskCell */
+        RiskCell: {
+            /** Lat */
+            lat: number;
+            /** Lon */
+            lon: number;
+            /** Score */
+            score: number;
+            /**
+             * Level
+             * @enum {string}
+             */
+            level: "low" | "moderate" | "high" | "very_high";
+        };
+        /** RiskPlace */
+        RiskPlace: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Lat */
+            lat: number;
+            /** Lon */
+            lon: number;
+            /** Distance Km */
+            distance_km: number;
+            /** Score */
+            score: number;
+            /**
+             * Level
+             * @enum {string}
+             */
+            level: "low" | "moderate" | "high" | "very_high";
+            /** Top Factors */
+            top_factors: string[];
+            /** Alert Id */
+            alert_id: string;
+            /**
+             * Alert Status
+             * @enum {string}
+             */
+            alert_status: "pending" | "sent" | "rejected" | "cancelled";
+        };
+        /** RiskResponse */
+        RiskResponse: {
+            /** Date */
+            date: string;
+            /** Stub */
+            stub: boolean;
+            /** Generated At */
+            generated_at: string | null;
+            /** Cell Deg */
+            cell_deg: number;
+            /**
+             * Flag Level
+             * @enum {string}
+             */
+            flag_level: "low" | "moderate" | "high" | "very_high";
+            /** Cells */
+            cells: components["schemas"]["RiskCell"][];
+            /** Places */
+            places: components["schemas"]["RiskPlace"][];
         };
         /** ValidationError */
         ValidationError: {
@@ -967,6 +1050,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    risk_today_risk_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RiskResponse"];
                 };
             };
         };
