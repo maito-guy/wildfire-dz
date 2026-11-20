@@ -1,5 +1,6 @@
 // Civil Protection dashboard. Talks only to the API contract (docs/contracts.md) through src/api/client.ts.
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { LayersControl } from "react-leaflet";
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 import type { LatLon, PredictResponse, Replay, Village } from "./api/client";
 import { api, ApiError } from "./api/client";
@@ -9,6 +10,8 @@ import type { WindInput } from "./components/Controls";
 import { Controls } from "./components/Controls";
 import type { MapView } from "./components/FireMap";
 import { FireMap } from "./components/FireMap";
+import { useFireData } from "./api/fireMap";
+import { FireLayers, FireLegend } from "./components/FireLayers";
 import { Header } from "./components/Header";
 import { Settings } from "./components/Settings";
 import { VillageList } from "./components/VillageList";
@@ -68,6 +71,7 @@ export default function App() {
   });
 
   const fires = useQuery({ queryKey: ["replays"], queryFn: api.replays });
+  const fireData = useFireData(); // satellite detections and fire history (#29)
   const villagesQ = useQuery({
     queryKey: ["villages", fireId],
     queryFn: () => api.villagesAtRisk(fireId!),
@@ -232,8 +236,21 @@ export default function App() {
           view={view}
           startMode={startMode}
           onMapClick={onMapClick}
-        />
+        >
+          <LayersControl position="topright">
+            <FireLayers
+              detections={fireData.detections.data}
+              history={fireData.history.data}
+              suppressClick={startMode}
+            />
+          </LayersControl>
+        </FireMap>
         <aside>
+          <FireLegend
+            detections={fireData.detections.data}
+            history={fireData.history.data}
+            error={fireData.detections.error || fireData.history.error ? "Could not load the fire map data." : ""}
+          />
           <Controls
             fires={fires.data ?? []}
             fireId={selectedFire}

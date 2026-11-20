@@ -13,6 +13,9 @@ export type Alert = Schemas["Alert"];
 export type AlertCreate = Schemas["AlertCreate"];
 export type LatLon = Schemas["LatLon"];
 export type Wind = Schemas["Wind"];
+export type Detection = Schemas["Detection"]; // fire map (#29)
+export type DetectionsResponse = Schemas["DetectionsResponse"];
+export type HistoryResponse = Schemas["HistoryResponse"];
 
 // /replay and /replay/{id} have no response_model in FastAPI, so the schema
 // types them as unknown. These mirror docs/contracts.md.
@@ -102,6 +105,12 @@ export const api = {
   replay: (fireId: string) => request<Replay>(`/replay/${encodeURIComponent(fireId)}`),
 
   reset: () => request<{ ok: boolean }>("/reset", { method: "POST" }, true),
+
+  // Fire map (#29). No `since`: the 7 days before the newest detection.
+  detections: (since?: string) =>
+    request<DetectionsResponse>(`/detections${since ? `?since=${encodeURIComponent(since)}` : ""}`),
+
+  history: () => request<HistoryResponse>("/history"),
 };
 
 export function zoneFeatures(p: PredictResponse): ZoneFeature[] {
