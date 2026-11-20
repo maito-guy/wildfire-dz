@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 
 from api.alerts import Broker
 from api.main import app
+from core.config import ROOT
 
 client = TestClient(app, headers={"X-Operator-Token": "test-token"})
 FIRE = [{"lat": 36.65, "lon": 4.10}, {"lat": 36.652, "lon": 4.104}]
@@ -20,7 +21,9 @@ def _reset(monkeypatch):
 
 def test_health_and_static():
     assert client.get("/health").json()["ok"] is True
-    assert client.get("/dashboard/").status_code == 200
+    # The React dashboard is served only once built (`make dashboard-build`); CI's Python job has no build.
+    built = (ROOT / "dashboard" / "dist" / "index.html").exists()
+    assert client.get("/dashboard/").status_code == (200 if built else 404)
     assert client.get("/alert/").status_code == 200
 
 

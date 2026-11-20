@@ -1,0 +1,91 @@
+// Every call to the API contract (docs/contracts.md). Types come from the
+// generated schema.ts (`npm run gen:api`). URLs are relative: same origin in
+// dev (Vite proxy) and in production (FastAPI serves dist/ at /dashboard/).
+import { getOperatorToken } from "../operatorToken";
+import type { components } from "./schema";
+
+type Schemas = components["schemas"];
+export type PredictRequest = Schemas["PredictRequest"];
+export type PredictResponse = Schemas["PredictResponse"];
+export type VillagesResponse = Schemas["VillagesResponse"];
+export type Village = Schemas["Village"];
+export type Alert = Schemas["Alert"];
+export type AlertCreate = Schemas["AlertCreate"];
+export type LatLon = Schemas["LatLon"];
+export type Wind = Schemas["Wind"];
+
+// /replay and /replay/{id} have no response_model in FastAPI, so the schema
+// types them as unknown. These mirror docs/contracts.md.
+export interface ReplayFire {
+  fire_id: string;
+  name: string;
+  n_passes: number;
+  stub: boolean;
+}
+export interface ReplayPass {
+  t: string;
+  satellite?: string | null;
+  burning: LatLon[];
+}
+export interface Replay {
+  fire_id: string;
+  name: string;
+  stub: boolean;
+  passes: ReplayPass[];
+}
+
+// Zone features from /predict (`zones` is a GeoJSON FeatureCollection).
+export interface ZoneFeature {
+  type: "Feature";
+  properties: { horizon_min: number };
+  geometry: GeoJSON.Polygon | GeoJSON.MultiPolygon;
+}
+
+export class ApiError extends Error {
+  readonly status: number;
+  constructor(path: string, status: number, body: string) {
+    super(`${path}: ${status} ${body}`);
+    this.status = status;
+  }
+}
+
+async function request<T>(path: string, init: RequestInit = {}, write = false): Promise<T> {
+  const headers = new Headers(init.headers);
+  if (init.body !== undefined) headers.set("Content-Type", "application/json");
+  if (write) {
+    const token = getOperatorToken();
+    if (token) headers.set("X-Operator-Token", token);
+  }
+  const r = await fetch(path, { ...init, headers });
+  if (!r.ok) throw new ApiError(path, r.status, await r.text());
+  return (await r.json()) as T;
+}
+
+const q = (fireId: string) => `?fire_id=${encodeURIComponent(fireId)}`;
+
+export const api = {
+  predict: (body: PredictRequest) =>
+    request<PredictResponse>("/predict", { method: "POST", body: JSON.stringify(body) }),
+
+  villagesAtRisk: (fireId: string) => request<VillagesResponse>(`/villages/at-risk${q(fireId)}`),
+
+  alerts: (fireId: string) => request<Alert[]>(`/alerts${q(fireId)}`),
+
+  sendAlert: (body: AlertCreate) =>
+    request<Alert>("/alerts", { method: "POST", body: JSON.stringify(body) }, true),
+
+  cancelAlert: (alertId: string) =>
+    request<Alert>(`/alerts/${encodeURIComponent(alertId)}/cancel`, { method: "POST" }, true),
+
+  replays: () => request<ReplayFire[]>("/replay"),
+
+  replay: (fireId: string) => request<Replay>(`/replay/${encodeURIComponent(fireId)}`),
+
+  reset: () => request<{ ok: boolean }>("/reset", { method: "POST" }, true),
+};
+
+export function zoneFeatures(p: PredictResponse): ZoneFeature[] {
+  const features = (p.zones as { features?: ZoneFeature[] }).features ?? [];
+  // Draw the 2 h zone first so the 1 h zone sits on top.
+  return [...features].sort((a, b) => b.properties.horizon_min - a.properties.horizon_min);
+}

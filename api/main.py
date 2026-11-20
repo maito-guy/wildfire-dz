@@ -250,5 +250,9 @@ async def root():
     return RedirectResponse("/dashboard/")
 
 
-app.mount("/dashboard", StaticFiles(directory=ROOT / "dashboard", html=True), name="dashboard")
+_DASHBOARD_DIST = ROOT / "dashboard" / "dist"
+if _DASHBOARD_DIST.is_dir():
+    app.mount("/dashboard", StaticFiles(directory=_DASHBOARD_DIST, html=True), name="dashboard")
+else:
+    log.warning("dashboard not built (%s missing): run `make dashboard-build`", _DASHBOARD_DIST)
 app.mount("/alert", StaticFiles(directory=ROOT / "alert", html=True), name="alert")
