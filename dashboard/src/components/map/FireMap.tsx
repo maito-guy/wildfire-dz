@@ -58,28 +58,33 @@ interface Props {
 maplibregl.setWorkerUrl(workerUrl);
 
 const HOME: [number, number] = [4.1, 36.6]; // lon, lat
-// Full-colour basemap (forests, relief, roads) so the operator reads the terrain the fire is in.
-const BASEMAP = "https://tiles.openfreemap.org/styles/liberty";
-const STYLE_TIMEOUT_MS = 4000;
-// Offline (a hall with no internet): plain land, the fire layers still draw.
-const OFFLINE_STYLE: StyleSpecification = {
+// Colour satellite basemap (Esri World Imagery) with place names and borders on top. The style is built
+// here, so no style file has to download first. Offline, the tiles fail and plain land shows under the
+// fire layers, which still draw.
+const ESRI = "https://server.arcgisonline.com/ArcGIS/rest/services";
+const BASEMAP: StyleSpecification = {
   version: 8,
-  sources: {},
-  layers: [{ id: "background", type: "background", paint: { "background-color": mapColors.land } }],
+  sources: {
+    imagery: {
+      type: "raster",
+      tiles: [`${ESRI}/World_Imagery/MapServer/tile/{z}/{y}/{x}`],
+      tileSize: 256,
+      maxzoom: 18,
+      attribution: "Imagery © Esri, Maxar, Earthstar Geographics",
+    },
+    labels: {
+      type: "raster",
+      tiles: [`${ESRI}/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}`],
+      tileSize: 256,
+      maxzoom: 18,
+    },
+  },
+  layers: [
+    { id: "background", type: "background", paint: { "background-color": mapColors.land } },
+    { id: "imagery", type: "raster", source: "imagery" },
+    { id: "labels", type: "raster", source: "labels" },
+  ],
 };
-
-async function loadStyle(): Promise<string | StyleSpecification> {
-  try {
-    const ctl = new AbortController();
-    const t = window.setTimeout(() => ctl.abort(), STYLE_TIMEOUT_MS);
-    const r = await fetch(BASEMAP, { signal: ctl.signal });
-    window.clearTimeout(t);
-    if (!r.ok) return OFFLINE_STYLE;
-    return (await r.json()) as StyleSpecification;
-  } catch {
-    return OFFLINE_STYLE;
-  }
-}
 
 // Which style layers each toggle drives.
 const LAYER_IDS: Record<Exclude<LayerKey, "villages">, string[]> = {
@@ -352,7 +357,7 @@ export function FireMap(p: Props) {
   useEffect(() => {
     let m: maplibregl.Map | null = null;
     let cancelled = false;
-    void loadStyle().then((style) => {
+    void Promise.resolve(BASEMAP).then((style) => {
       if (cancelled || !box.current) return;
       m = new maplibregl.Map({
         container: box.current,
