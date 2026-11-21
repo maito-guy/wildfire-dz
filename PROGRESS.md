@@ -39,7 +39,7 @@ entries short and factual. Use absolute dates (YYYY-MM-DD).
 | C-16 | Monorepo with npm workspaces (`dashboard` = `wildfire-dashboard`, `api` = `@wildfire/api`) and one root lockfile. `npm ci` at the root; `npx turbo dev` (or `make dev`) runs the API on :8000 and the dashboard on :5173; `npx turbo lint typecheck test build` runs every check with caching. `.venv` must exist first. Add dashboard packages with `npm install <pkg> --workspace dashboard` | #42 |
 | C-17 | The dashboard polls `GET /health` every 5 s (10 s fetch timeout); unreachable is shown in words. `/health` and `/replay` are typed by hand in `src/api/client.ts` (no `response_model`). The alert log time is the last status change; sent and cancelled rows link to `cap.xml` | #41 |
 | C-18 | Docker: `make docker-up` (= `docker compose up -d --build`) serves everything on `${PORT:-8000}`. `.env` read at runtime; `data/out` and `model/artifacts` mounted read-only, so new files need `docker compose restart`, not a rebuild. CI job `docker` builds the image | #40 |
-| C-13 | `/predict` wind: request → Open-Meteo forecast (within `forecast.past_days` = 10 days) → ERA5 archive (older) → `weather_default`. Cached per (lat, lon, hour) for 15 min; failures are not cached | #35 |
+| C-13 | `/predict` wind: request → Open-Meteo forecast (within `forecast.past_days` = 10 days) → ERA5 archive (older) → `weather_default`. Vector mean of the nearest hour and the next `forecast.mean_hours` (2), like the training feature `wind_speed_2h`. Cached per (lat, lon, hour) for 15 min; failures are not cached | #35 |
 
 ---
 

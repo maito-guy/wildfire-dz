@@ -102,6 +102,8 @@ forecast:                                  # Open-Meteo wind for /predict when t
   timeout_s: 3
   cache_min: 15
   past_days: 10                            # times newer than now - past_days use the forecast API (the ERA5 archive lags ~5 days)
+  mean_hours: 2                            # wind = vector mean of the nearest hour and the next 2, like the training
+                                           # feature wind_speed_2h / wind_from_2h; 0 = the nearest hour only
 
 cap:                                       # CAP 1.2 message for the simulated cell broadcast (api/cap.py)
   sender: "alerts@civil-protection.example.dz"
