@@ -7,6 +7,9 @@ Until that file exists, serves deterministic STUB cells over northern Algeria, f
 Each place near a cell at `risk.flag_level` (very high) becomes ONE pending `preventive` flag per day in the
 approval queue, through `AlertStore.flag` (source `ai_risk`, fire_id `risk_<date>`; PROGRESS C-12). A place
 already flagged that day, whatever happened to the flag (sent, rejected, cancelled), is not flagged again.
+
+Before the cells are simplified and flagged, each cell's level is capped by the day's fire weather
+(`api/fwi.py`, `risk.fwi.cap`, #57), so a calm day stays calm. No fire weather (Open-Meteo down) -> no cap.
 """
 from __future__ import annotations
 
@@ -16,6 +19,7 @@ from functools import lru_cache
 import numpy as np
 import pandas as pd
 
+from api import fwi as fire_weather
 from api import impact, stub_places
 from api.alerts import store
 from core import geo
@@ -188,12 +192,54 @@ def sync_flags(places: list[dict], date: str, data_age_min: int) -> list[dict]:
     return places
 
 
-def today(cfg: dict | None = None) -> dict:
-    """The `GET /risk` answer (docs/contracts.md). Creates the day's preventive flags on first call."""
+def day_of(df: pd.DataFrame) -> str:
+    """The day the loaded rows are for (today when the file is empty)."""
+    return str(df["date"].iloc[0]) if not df.empty else dt.datetime.now(dt.UTC).date().isoformat()
+
+
+def cap_levels(df: pd.DataFrame, fw: dict | None, cfg: dict) -> tuple[pd.DataFrame, int]:
+    """Cap each cell's level by the FWI class of its nearest weather point. Returns (rows, cells capped)."""
+    if fw is None or df.empty:
+        return df, 0
+    fc = cfg["risk"]["fwi"]
+    idx = fire_weather.nearest(cfg, df["lat"].to_numpy(), df["lon"].to_numpy())
+    caps = [fc["cap"].get(fire_weather.classify(fw["points"][i], fc["classes"])) if i in fw["points"] else None
+            for i in idx.tolist()]
+    level = df["level"].astype(str).tolist()
+    new = [c if c is not None and _rank_of(lv) > _rank_of(c) else lv for lv, c in zip(level, caps)]
+    n = sum(a != b for a, b in zip(level, new))
+    return (df.assign(level=new) if n else df), n
+
+
+def weather_summary(fw: dict | None, capped: int, cfg: dict) -> dict | None:
+    """The `fwi` block of GET /risk: the worst point's FWI and class, the median, and how many cells were capped."""
+    if fw is None:
+        return None
+    v = np.array(list(fw["points"].values()))
+    worst = float(v.max())
+    return {"date": fw["date"], "source": fw["source"], "value": round(worst, 1),
+            "level": fire_weather.classify(worst, cfg["risk"]["fwi"]["classes"]),
+            "median": round(float(np.median(v)), 1), "points": len(v), "step_deg": fw["step_deg"],
+            "capped_cells": capped}
+
+
+async def fetch_weather(df: pd.DataFrame, cfg: dict) -> dict | None:
+    """The day's FWI at the weather points nearest the cells, or None (no cells, disabled, or Open-Meteo failed)."""
+    if df.empty:
+        return None
+    return await fire_weather.for_day(day_of(df), cfg,
+                                      fire_weather.nearest(cfg, df["lat"].to_numpy(), df["lon"].to_numpy()))
+
+
+def today(cfg: dict | None = None, fw: dict | None = None,
+          loaded: tuple[pd.DataFrame, bool, dt.datetime | None] | None = None) -> dict:
+    """The `GET /risk` answer (docs/contracts.md). Creates the day's preventive flags on first call.
+    fw: the day's fire weather (api/fwi.py, None = no cap); loaded: the result of load(cfg), if already read."""
     cfg = cfg or load_config()
-    df, stub, written = load(cfg)
-    date = str(df["date"].iloc[0]) if not df.empty else dt.datetime.now(dt.UTC).date().isoformat()
+    df, stub, written = loaded or load(cfg)
+    date = day_of(df)
     age = int((dt.datetime.now(dt.UTC) - written).total_seconds() // 60) if written else 0
+    df, capped = cap_levels(df, fw, cfg)
     cells = simplify(df, cfg)
     places = sync_flags(flagged_places(cells, cfg), date, max(0, age))
     return {
@@ -202,4 +248,7 @@ def today(cfg: dict | None = None) -> dict:
         "cells": [{"lat": float(c.lat), "lon": float(c.lon), "score": float(c.score), "level": str(c.level)}
                   for c in cells.itertuples(index=False)],
         "places": places,
+        "fwi": weather_summary(fw, capped, cfg),
+        "fwi_note": None if fw is not None or not cfg["risk"]["fwi"].get("enabled", True)
+        else "Fire weather unavailable: risk levels are not capped",
     }

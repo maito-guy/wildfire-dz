@@ -206,6 +206,24 @@ risk:                                      # today's risk layer and preventive f
     moderate: 0.3                          # PLACEHOLDER
     high: 0.55                             # PLACEHOLDER
     very_high: 0.8                         # PLACEHOLDER
+  fwi:                                     # cap each cell's level by the day's fire weather (api/fwi.py, #57)
+    enabled: true
+    step_deg: 0.5                          # weather points over fire_map.bbox (only those nearest a cell are asked)
+    spinup_days: 60                        # FWI codes start from the standard values this many days before
+    forecast_max_past_days: 90             # spin-up starting within this many days of today -> forecast API, else ERA5
+    timeout_s: 10
+    cache_min: 60
+    classes:                               # FWI lower bounds per class (EFFIS fire danger classes)
+      very_low: 0
+      low: 5.2
+      moderate: 11.2
+      high: 21.3
+      very_high: 38.0
+      extreme: 50.0
+    cap:                                   # FWI class -> highest risk level a cell may show; missing = no cap
+      very_low: moderate
+      low: moderate
+      moderate: high
 fire_map:                                  # GET /detections and GET /history (api/detections.py, #29)
   default_hours: 168                       # /detections without `since`: the 7 days before the newest detection
   max_points: 20000                        # newest first; the response says `truncated` when more matched

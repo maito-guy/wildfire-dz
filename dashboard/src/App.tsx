@@ -440,7 +440,7 @@ export default function App() {
             onScoreboard={() => setScoreOpen(true)}
             onSettings={() => setSettingsOpen(true)}
           />
-          <MapControls basemap={basemap} onBasemap={setBasemap} layers={layers} onLayer={setLayer} aiAvailable={!!prediction?.ai} />
+          <MapControls basemap={basemap} onBasemap={setBasemap} layers={layers} onLayer={setLayer} aiAvailable={!!prediction?.ai} risk={riskQ.data} />
         </div>
 
         <div className="order-3 lg:absolute lg:left-1/2 lg:top-0 lg:w-max lg:max-w-md lg:-translate-x-1/2">

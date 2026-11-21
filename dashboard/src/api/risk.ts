@@ -8,6 +8,17 @@ export type RiskResponse = Schemas["RiskResponse"];
 export type RiskCell = Schemas["RiskCell"];
 export type RiskPlace = Schemas["RiskPlace"];
 export type RiskLevel = RiskCell["level"];
+export type FireWeather = Schemas["FireWeather"];
+
+/** The day's fire weather (FWI class, EFFIS) in words, for the Layers card (#57). */
+export const FIRE_WEATHER_WORD: Record<FireWeather["level"], string> = {
+  very_low: "very low",
+  low: "low",
+  moderate: "moderate",
+  high: "high",
+  very_high: "very high",
+  extreme: "extreme",
+};
 
 export const RISK_KEY = ["risk"] as const;
 

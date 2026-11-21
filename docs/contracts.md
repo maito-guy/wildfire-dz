@@ -39,6 +39,10 @@ and a message in the team chat naming who is affected. Everything is WGS84 lat/l
   key `paths.detections_live`, section `firms_live:`. `GET /detections` serves the archive and the live rows together.
   `GET /health` adds `firms_live: {enabled, reason, last_ok, last_error, added, newest}`. Additive; affected: dashboard (none needed).
 
+- **v0.8 (#57, fire weather cap).** `GET /risk` caps each cell's level by the day's Fire Weather Index (Open-Meteo,
+  `api/fwi.py`) before simplifying and flagging, and gains `fwi` (the day's fire weather, or `null` = no cap) and
+  `fwi_note`. New `config.yaml` section `risk.fwi`. Additive. Affected: dashboard (Layers card shows the fire weather).
+
 ---
 
 ## 1. Data contract
@@ -425,7 +429,10 @@ Today's risk layer, simplified for the map, and the very-high-risk places. No to
     {"id": "osm:123456", "name": "Village X", "lat": 36.62, "lon": 4.11, "distance_km": 1.3,
      "score": 0.91, "level": "very_high", "top_factors": ["wind", "dryness", "past fires"],
      "alert_id": "al_0007", "alert_status": "pending"}
-  ]
+  ],
+  "fwi": {"date": "2026-11-20", "source": "forecast", "value": 31.4, "level": "high", "median": 14.2,
+          "points": 96, "step_deg": 0.5, "capped_cells": 0},
+  "fwi_note": null
 }
 ```
 - `cells`: the file's cells merged onto a `cell_deg` lattice (`config.yaml → risk.display_cell_deg`), keeping the
@@ -439,6 +446,16 @@ Today's risk layer, simplified for the map, and the very-high-risk places. No to
   queue (event `flag` on `/events`). A place already flagged that day, whatever its status (pending, sent, rejected,
   cancelled), is not flagged again; `alert_id`/`alert_status` point at that alert. Flags are created when `/risk` is
   read (the dashboard reads it on load), so after `POST /reset` they come back on the next read.
+- **Fire weather cap** *(v0.8, #57)*: before cells are merged and flagged, each file cell's `level` is lowered to at
+  most `risk.fwi.cap[<FWI class>]` of its nearest weather point (FWI classes: EFFIS bounds in `risk.fwi.classes`;
+  default cap: `very_low`/`low` → `moderate`, `moderate` → `high`, `high` and above → no cap). Scores are unchanged.
+  The FWI is computed for `date` from Open-Meteo daily weather (max temperature, min humidity, mean wind, total rain) at
+  `risk.fwi.step_deg` points over `fire_map.bbox`, with a `risk.fwi.spinup_days` spin-up, in one request (forecast API
+  when the spin-up is within `risk.fwi.forecast_max_past_days` days of today, else the ERA5 archive), cached
+  `risk.fwi.cache_min` minutes.
+- `fwi`: `value` and `level` are the **worst** weather point (the dashboard shows "Fire weather: high (FWI 31)"),
+  `median` over all points used, `capped_cells` = file cells whose level was lowered. `null` when the weather call
+  failed (then no cap and `fwi_note` says so) or `risk.fwi.enabled` is false (then `fwi_note` is also `null`).
 - `stub: true` (and `generated_at: null`) = `risk_today.parquet` is missing: deterministic **fake** cells over northern
   Algeria and places named `STUB place …`. Not real data.
 
