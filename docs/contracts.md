@@ -379,6 +379,10 @@ with `"stub": true`, `"status": "not measured yet"`, one entry per `config.yaml 
   `village`, `lead_min`, `old_method_lead_min` is `null`, the dashboard shows "not measured".
 - Model keys are free-form (`A`, `B`, `C_<tag>`); the dashboard shows whichever are present. Extra keys
   (`n_rows`, `n_burned_cells`) are ignored.
+- `ship_c.decision` is always one string (`"ship C_<tag>"`, `"keep B"` or `"not measured yet"`). The reason per C
+  model is in the optional `ship_c.decision_by_model` (`{"C_dza": "keep B: kabylie_2021: misses 4 villages, B misses 1"}`).
+  `model.evaluate` also writes extra per-holdout sections (`matched_recall`, `villages_where_c_has_cells`,
+  `wind_robustness`); the dashboard ignores them.
 
 ### `GET /risk` *(added v0.4, #28)*
 Today's risk layer, simplified for the map, and the very-high-risk places. No token.

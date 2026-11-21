@@ -105,6 +105,16 @@ def ship_decision(board: dict, boosters: dict) -> dict | str:
     return out
 
 
+def ship_summary(by_model: dict | str) -> dict:
+    """ship_c for scoreboard.json: `decision` stays one string (docs/contracts.md, the dashboard prints it);
+    the reason per C model goes in `decision_by_model`."""
+    if isinstance(by_model, str):
+        return {"rule": SHIP_RULE, "decision": by_model}
+    ships = sorted(m for m, d in by_model.items() if d == "ship")
+    decision = f"ship {ships[0]}" if ships else "keep B"
+    return {"rule": SHIP_RULE, "decision": decision, "decision_by_model": by_model}
+
+
 def va_all_pos(df: pd.DataFrame, cfg: dict, countries) -> pd.DataFrame:
     """Burned cells of the validation fires, short AND long pairs (arrival times up to 16 h)."""
     _, va, _ = split(df, cfg, None if countries in (None, "all") else countries)
@@ -265,7 +275,7 @@ def evaluate(cfg: dict, table: str | None = None) -> dict:
                     entry.setdefault("villages_where_c_has_cells", {})[m] = res
         board["fires"].append(entry)
 
-    board["ship_c"] = {"rule": SHIP_RULE, "decision": ship_decision(board, boosters)}
+    board["ship_c"] = ship_summary(ship_decision(board, boosters))
     (art / "thresholds.json").write_text(json.dumps(thresholds, indent=2))
     (art / "scoreboard.json").write_text(json.dumps(board, indent=2))
     print(json.dumps(board, indent=2))
