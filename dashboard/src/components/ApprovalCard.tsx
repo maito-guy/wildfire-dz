@@ -2,7 +2,7 @@ import { useRef, useState } from "react";
 import type { Alert } from "../api/client";
 import type { AlertApprove } from "../api/approval";
 import { langsOf, missingLangs, SOURCE_WORD } from "../api/approval";
-import { fmtAge, statusWord } from "../format";
+import { BOTH_TIMES_TITLE, fmtAge, fmtBothTimes, statusWord } from "../format";
 import { StatusBadge } from "./status-badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -134,7 +134,12 @@ export function ApprovalCard({ alert: a, selected, onSelect, onApprove, onReject
           )}
         </span>
       </button>
-      <p className="mt-2 font-mono text-[11.5px] leading-relaxed text-muted-foreground tabular-nums">
+      {a.level !== "preventive" && (
+        <p className="mt-2 font-mono text-[12px] font-semibold tabular-nums" title={BOTH_TIMES_TITLE}>
+          {fmtBothTimes(a.minutes_left, a.ai_minutes_left)}
+        </p>
+      )}
+      <p className={cn("font-mono text-[11.5px] leading-relaxed text-muted-foreground tabular-nums", a.level === "preventive" ? "mt-2" : "mt-1")}>
         {a.level === "preventive"
           ? `fire risk for ${a.scenario_time.slice(0, 10)} (no fire yet)`
           : `${a.distance_km.toFixed(1)} km from the fire · fire to the ${a.fire_direction} · leave → ${a.leave_toward} · ${fmtAge(a.data_age_min)}`}{" "}

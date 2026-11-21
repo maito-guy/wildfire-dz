@@ -56,6 +56,13 @@ export interface ZoneFeature {
   geometry: GeoJSON.Polygon | GeoJSON.MultiPolygon;
 }
 
+// Model C's advice zones (`PredictResponse.ai.zones`, contract v0.6): B's zone shape plus a confidence level.
+export interface AiZoneFeature {
+  type: "Feature";
+  properties: { horizon_min: number; confidence: "likely" | "possible" };
+  geometry: GeoJSON.Polygon | GeoJSON.MultiPolygon;
+}
+
 export class ApiError extends Error {
   readonly status: number;
   constructor(path: string, status: number, body: string) {

@@ -40,6 +40,7 @@ const DEFAULT_LAYERS: LayerVisibility = {
   burning: true,
   zone1h: true,
   zone2h: true,
+  ai: true, // drawn only when /predict has an `ai` block (replays with model C's answers)
   villages: true,
   alertAreas: true,
   nextPass: true,
@@ -439,7 +440,7 @@ export default function App() {
             onScoreboard={() => setScoreOpen(true)}
             onSettings={() => setSettingsOpen(true)}
           />
-          <MapControls basemap={basemap} onBasemap={setBasemap} layers={layers} onLayer={setLayer} />
+          <MapControls basemap={basemap} onBasemap={setBasemap} layers={layers} onLayer={setLayer} aiAvailable={!!prediction?.ai} />
         </div>
 
         <div className="order-3 lg:absolute lg:left-1/2 lg:top-0 lg:w-max lg:max-w-md lg:-translate-x-1/2">

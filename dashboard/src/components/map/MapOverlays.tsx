@@ -1,6 +1,7 @@
 // Floating map controls: map view switch (Heatmap / 3D / Normal) and the Layers button, which opens a short
 // list of grouped toggles. Each group drives several map layers, so the operator sees five choices, not nine.
 // This card is the only place a layer is switched on or off; the dots double as the legend.
+// The AI estimate (model C, #53) is advice only: its row is disabled when /predict has no `ai` block.
 import { Cube, Fire, MapTrifold, StackSimple, X } from "@phosphor-icons/react";
 import { useState } from "react";
 import { DETECTION_COLOR, HISTORY_RAMP } from "../../api/fireMap";
@@ -9,11 +10,12 @@ import { mapColors } from "../../map/colors";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { floating } from "@/lib/utils";
+import { cn, floating } from "@/lib/utils";
 import type { Basemap, LayerKey, LayerVisibility } from "./FireMap";
 
 const GROUPS: { label: string; keys: LayerKey[]; color: string }[] = [
   { label: "Fire spread", keys: ["burning", "zone1h", "zone2h", "nextPass"], color: mapColors.burning },
+  { label: "AI estimate, check before acting", keys: ["ai"], color: "var(--ai)" },
   { label: "Villages", keys: ["villages", "alertAreas"], color: "var(--ink)" },
   { label: "Satellite detections", keys: ["detections"], color: DETECTION_COLOR.day },
   { label: "Past fires", keys: ["history"], color: HISTORY_RAMP[HISTORY_RAMP.length - 1] },
@@ -31,9 +33,11 @@ interface Props {
   onBasemap: (b: Basemap) => void;
   layers: LayerVisibility;
   onLayer: (k: LayerKey, v: boolean) => void;
+  /** The current prediction has model C's zones (`PredictResponse.ai` is not null). */
+  aiAvailable: boolean;
 }
 
-export function MapControls({ basemap, onBasemap, layers, onLayer }: Props) {
+export function MapControls({ basemap, onBasemap, layers, onLayer, aiAvailable }: Props) {
   const [open, setOpen] = useState(false);
   return (
     <div className="flex flex-col items-end gap-2">
@@ -64,15 +68,33 @@ export function MapControls({ basemap, onBasemap, layers, onLayer }: Props) {
         </Button>
       </div>
       {open && (
-        <section className={floating("animate-in-up w-52 p-2.5")} aria-label="Layers">
+        <section className={floating("animate-in-up w-60 p-2.5")} aria-label="Layers">
           <p className="label-mono mb-1.5">Layers</p>
           {GROUPS.map((g) => {
             const id = `layer-${g.keys[0]}`;
+            const isAi = g.keys[0] === "ai";
+            const off = isAi && !aiAvailable;
             return (
-              <label key={g.label} htmlFor={id} className="flex min-h-7 cursor-pointer items-center gap-2 text-xs">
-                <span className="size-2.5 shrink-0 rounded-full" style={{ background: g.color }} aria-hidden="true" />
-                <span className="flex-1">{g.label}</span>
-                <Switch id={id} checked={layers[g.keys[0]]} onCheckedChange={(v) => g.keys.forEach((k) => onLayer(k, v))} />
+              <label
+                key={g.label}
+                htmlFor={id}
+                className={cn("flex min-h-7 items-center gap-2 py-0.5 text-xs", off ? "cursor-not-allowed" : "cursor-pointer")}
+              >
+                <span className={cn("size-2.5 shrink-0 rounded-full", off && "opacity-40")} style={{ background: g.color }} aria-hidden="true" />
+                <span className="flex-1 leading-tight">
+                  <span className={cn("block", off && "text-muted-foreground")}>{g.label}</span>
+                  {isAi && (
+                    <span className="block font-mono text-[10px] text-muted-foreground">
+                      {off ? "no AI estimate for this fire" : "solid likely · dashed possible"}
+                    </span>
+                  )}
+                </span>
+                <Switch
+                  id={id}
+                  checked={!off && layers[g.keys[0]]}
+                  disabled={off}
+                  onCheckedChange={(v) => g.keys.forEach((k) => onLayer(k, v))}
+                />
               </label>
             );
           })}
