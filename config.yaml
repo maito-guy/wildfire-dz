@@ -16,9 +16,15 @@ paths:
   artifacts: model/artifacts               # model_c.txt, thresholds.json, scoreboard.json, features.json
   alert_texts: alert/texts.json
   risk_today: model/artifacts/risk_today.parquet  # daily risk cells from model.risk (#27, docs/contracts.md); stub cells if missing
+  static_raster: data/out/static_375m.npz   # terrain + fuel per 375 m cell, northern Algeria (data/build_static_raster.py, #17)
 
 scope:
   lat_min: 34.5                            # northern Algeria only
+
+static_raster:                             # data/build_static_raster.py (`make static-raster`), read by core/static_raster.py
+  bbox: [-2.3, 34.5, 8.7, 37.2]            # [lon_min, lat_min, lon_max, lat_max]: Algeria north of scope.lat_min (+ sea, borders)
+  chunk_cells: 128                         # cells per chunk side (48 km); each chunk is cached, so the build resumes
+  cache_dir: data/cache_static_raster      # per-chunk cache (git-ignored)
 
 grid:
   cell_m: 375                              # VIIRS I-band cell
