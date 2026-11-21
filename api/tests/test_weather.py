@@ -130,3 +130,12 @@ def test_mean_crosses_midnight():
     wind, src = _run(at, two_days, calls, cfg=CFG)
     assert calls[0].url.params["start_date"] == "2021-08-09" and calls[0].url.params["end_date"] == "2021-08-10"
     assert wind == {"speed_kmh": 18.0, "from_deg": 200.0}                           # 33 at 23 h, then 10 and 11
+
+
+def test_north_wind_360_becomes_0():
+    """Open-Meteo reports due north as 360 deg; Wind.from_deg must be < 360 or /predict answers 500."""
+    at = dt.datetime(2021, 8, 9, 12, tzinfo=dt.UTC)
+    for cfg in (CFG0, CFG):
+        weather._cache.clear()
+        wind, src = _run(at, lambda r: httpx.Response(200, json=_hourly(at.date(), deg=360.0)), [], cfg=cfg)
+        assert src == "reanalysis" and wind["from_deg"] == 0.0
