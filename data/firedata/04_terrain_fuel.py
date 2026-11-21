@@ -99,18 +99,23 @@ def static_for_fire(f, dem_url=C.DEM_URL, wc_url=C.WORLDCOVER_URL):
 
 
 def main():
+    import argparse
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--shard", default="0/1", help="i/n: this process does every n-th fire (run n at once)")
+    a = ap.parse_args()
+    i, n_sh = map(int, a.shard.split("/"))
     fires = pd.read_parquet(C.OUT / "fires.parquet")
     pairs = pd.read_parquet(C.OUT / "pairs.parquet")
-    grew = pairs.groupby("fire_id").n_new.sum()
-    need = fires[fires.fire_id.isin(grew[grew > 0].index)]      # same fires as step 3
-    need = need.assign(dza=need.country == "DZA").sort_values("dza", ascending=False)
+    order = C.growing_fires(fires.set_index("fire_id"), pairs)  # same fires as step 3
+    need = fires.set_index("fire_id").loc[order.index].reset_index()
+    need = need.iloc[i::n_sh]
     todo = [r for r in need.itertuples() if not (C.CACHE_STATIC / f"{r.fire_id}.npz").exists()]
     print(f"{len(need):,} fires to cover, {len(todo):,} still need terrain and fuel")
     with rasterio.Env(**ENV):
         for n, f in enumerate(todo, 1):
             np.savez_compressed(C.CACHE_STATIC / f"{f.fire_id}.npz", **static_for_fire(f))
             if n % 100 == 0:
-                print(f"{n}/{len(todo)}")
+                print(f"{n}/{len(todo)}", flush=True)
 
 
 if __name__ == "__main__":

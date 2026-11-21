@@ -64,3 +64,20 @@ WEATHER_VARS = ["temperature_2m", "relative_humidity_2m", "vapour_pressure_defic
                 "wind_speed_10m", "wind_direction_10m", "wind_gusts_10m",
                 "precipitation", "soil_moisture_0_to_7cm"]
 WEATHER_LOOKBACK_DAYS = 10   # to compute "hours since rain"
+
+# Keep only the N fires that grew most in these countries (steps 3 and 4). Turkey has ~15,000
+# growing fires, mostly small farm burns; uncapped it would be 64 % of the table and of the calls.
+COUNTRY_CAP = {"TUR": 1500}
+
+
+def growing_fires(fires, pairs):
+    """Fire ids that grew (step 3 and 4 cover the same set), Algeria first, then by growth,
+    with COUNTRY_CAP applied. fires: indexed by fire_id."""
+    import pandas as pd
+    g = pairs.groupby("fire_id").n_new.sum()
+    g = g[g > 0]
+    d = pd.DataFrame({"g": g, "country": fires.country.reindex(g.index)})
+    d = d.sort_values("g", ascending=False)
+    d = d[d.groupby("country").cumcount() < d.country.map(COUNTRY_CAP).fillna(len(d))]
+    d["dza"] = d.country == "DZA"
+    return d.sort_values(["dza", "g"], ascending=[False, False])

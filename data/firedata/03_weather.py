@@ -36,12 +36,13 @@ def main():
     a = ap.parse_args()
     fires = pd.read_parquet(C.OUT / "fires.parquet").set_index("fire_id")
     pairs = pd.read_parquet(C.OUT / "pairs.parquet")
-    useful = pairs.groupby("fire_id").n_new.sum()
-    if not a.all:
-        useful = useful[useful > 0]          # fires that never grew teach little
-    # Algeria first, then the fires that grew most
-    order = pd.DataFrame({"g": useful, "dza": fires.country.reindex(useful.index) == "DZA"})
-    order = order.sort_values(["dza", "g"], ascending=[False, False])
+    if a.all:
+        useful = pairs.groupby("fire_id").n_new.sum()
+        order = pd.DataFrame({"g": useful, "dza": fires.country.reindex(useful.index) == "DZA"})
+        order = order.sort_values(["dza", "g"], ascending=[False, False])
+    else:
+        order = C.growing_fires(fires, pairs)   # grew, Algeria first, COUNTRY_CAP applied
+        useful = order.g
     todo = [f for f in order.index if not (C.CACHE_WEATHER / f"{f}.json").exists()]
     print(f"{len(useful):,} fires to cover, {len(todo):,} still need weather")
     for n, fid in enumerate(todo[: a.max], 1):
@@ -52,7 +53,7 @@ def main():
         (C.CACHE_WEATHER / f"{fid}.json").write_text(json.dumps(js["hourly"]))
         time.sleep(0.12)                               # stays under 600 calls a minute
         if n % 200 == 0:
-            print(f"{n}/{min(len(todo), a.max)}")
+            print(f"{n}/{min(len(todo), a.max)}", flush=True)
 
 
 if __name__ == "__main__":
