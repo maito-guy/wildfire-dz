@@ -11,6 +11,12 @@ def _offline(request: httpx.Request) -> httpx.Response:
 
 
 @pytest.fixture(autouse=True)
+def no_firms_key(monkeypatch):
+    """A FIRMS_MAP_KEY in .env must not start the live FIRMS loop in tests (#61). An empty env var wins over .env."""
+    monkeypatch.setenv("FIRMS_MAP_KEY", "")
+
+
+@pytest.fixture(autouse=True)
 def no_network_weather(monkeypatch):
     for mod in (weather, fwi):
         monkeypatch.setattr(mod, "_make_client",

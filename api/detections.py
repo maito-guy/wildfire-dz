@@ -3,6 +3,7 @@
 Reads `paths.detections` and `paths.history_grid` (schemas in docs/contracts.md). Real data is cut to
 northern Algeria (lat >= scope.lat_min; `country == "DZA"` when the column exists, else `fire_map.bbox`)
 and gas flares are dropped (750 m blocks lit on many days across many years, the 02_clean.py rule).
+Live FIRMS rows (paths.detections_live, #61) are served with the archive.
 History comes from history_grid.parquet, else is aggregated from detections.parquet, else is a stub.
 Until the data files exist, deterministic stub data over northern Algeria is served, flagged `stub: true`.
 
@@ -52,11 +53,13 @@ def clean(df: pd.DataFrame, cfg: dict) -> pd.DataFrame:
     df = df.copy()
     df["t"] = pd.to_datetime(df["t"], utc=True)
     keep = df["lat"].to_numpy() >= cfg["scope"]["lat_min"]
-    if "country" in df.columns:
-        keep &= (df["country"] == "DZA").to_numpy()
+    lon_min, lat_min, lon_max, lat_max = fm["bbox"]
+    in_box = df["lon"].between(lon_min, lon_max).to_numpy() & df["lat"].between(lat_min, lat_max).to_numpy()
+    if "country" in df.columns:  # rows without a country (live FIRMS, #61) are cut by the bbox
+        c = df["country"]
+        keep &= ((c == "DZA") | (c.isna() & in_box)).to_numpy()
     else:
-        lon_min, lat_min, lon_max, lat_max = fm["bbox"]
-        keep &= df["lon"].between(lon_min, lon_max).to_numpy() & df["lat"].between(lat_min, lat_max).to_numpy()
+        keep &= in_box
     if "flare" in df.columns:
         keep &= ~df["flare"].fillna(False).astype(bool).to_numpy()
     df = df[keep]
@@ -92,9 +95,28 @@ def _read_detections(path: str, mtime: float) -> pd.DataFrame:
     return clean(pd.read_parquet(path), load_config())
 
 
+@lru_cache(maxsize=2)
+def _read_with_live(path: str | None, mtime: float, live: str | None, live_mtime: float) -> pd.DataFrame:
+    """Archive + live FIRMS rows (#61), deduplicated (same place, minute and satellite)."""
+    parts = [pd.read_parquet(p) for p in (path, live) if p]
+    df = pd.concat(parts, ignore_index=True) if len(parts) > 1 else parts[0]
+    df = clean(df, load_config())
+    sat = next((c for c in ("satellite", "sat") if c in df.columns), None)
+    k = df.lat.round(4).astype(str) + df.lon.round(4).astype(str) + df.t.dt.strftime("%Y%m%d%H%M")
+    if sat:
+        k = k + df[sat].astype(str)
+    return df[~k.duplicated()].reset_index(drop=True)
+
+
 def real_detections() -> pd.DataFrame | None:
+    """The archive (`paths.detections`) plus the live FIRMS file (`paths.detections_live`) when it exists."""
     p = _path("detections")
-    return _read_detections(str(p), p.stat().st_mtime) if p.exists() else None
+    live_rel = load_config()["paths"].get("detections_live")
+    live = repo_path(live_rel) if live_rel else None
+    if live is None or not live.is_file():
+        return _read_detections(str(p), p.stat().st_mtime) if p.exists() else None
+    arch = (str(p), p.stat().st_mtime) if p.exists() else (None, 0.0)
+    return _read_with_live(*arch, str(live), live.stat().st_mtime)
 
 
 @lru_cache(maxsize=2)

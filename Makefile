@@ -7,7 +7,7 @@ PORT ?= 8000
 EXPORT ?= $(HOME)/Downloads/algeria-fire-map-data/detections.csv
 EXPORT_DIR ?= data/algeria-fire-map-data
 
-.PHONY: help setup dev api dashboard-dev dashboard-build test lint fmt check-columns train train-dza train-dza-nowind evaluate crossval replay-ai export model data import-export static-raster lan-ip demo-check docker-up docker-down docker-logs
+.PHONY: help setup dev api dashboard-dev dashboard-build test lint fmt check-columns train train-dza train-dza-nowind evaluate crossval replay-ai export model data import-export static-raster firms-live lan-ip demo-check docker-up docker-down docker-logs
 
 help:            ## list targets
 	@grep -E '^[a-z-]+:.*##' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-14s %s\n", $$1, $$2}'
@@ -77,8 +77,11 @@ import-export:   ## real data for the API from the Algeria Fire Map export (EXPO
 static-raster:   ## terrain + fuel at 375 m for northern Algeria -> data/out/static_375m.npz (#17; resumable, network)
 	$(PY) data/build_static_raster.py
 
+firms-live:      ## fetch the newest FIRMS detections once into data/live/ (needs FIRMS_MAP_KEY in .env)
+	$(PY) -m api.firms_live
+
 docker-up:       ## build and start the whole demo in Docker (API + dashboard + phone page) on :$(PORT)
-	@mkdir -p data/out model/artifacts
+	@mkdir -p data/out data/live model/artifacts
 	docker compose up -d --build
 
 docker-down:     ## stop and remove the demo container

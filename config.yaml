@@ -7,6 +7,7 @@ paths:
   places: data/out/places.parquet          # OSM settlements (id, name, lat, lon); falls back to stub places if missing
   replay_passes: data/out/replay_passes.parquet  # held-out fire passes (see docs/contracts.md); falls back to a synthetic fire
   detections: data/out/detections.parquet  # VIIRS detections for the fire map (#29); falls back to stub detections
+  detections_live: data/live/firms_live.parquet  # newest FIRMS NRT detections (api/firms_live.py, #61); merged with `detections`
   history_grid: data/out/history_grid.parquet  # pre-aggregated fire history (#29); else built from detections, else stub
   holdout_dense: data/out/holdout_dense.parquet  # every cell around the holdout fires (data step 7), to score C on villages
   events_replay: data/out/events_replay.parquet  # same, for crossval.events (step 6 --events); only crossval.py reads them
@@ -230,3 +231,10 @@ fire_map:                                  # GET /detections and GET /history (a
   flare_min_days: 15                       # gas flares: a 750 m block seen on this many distinct days ...
   flare_min_years: 3                       # ... across this many years is dropped (same rule as data/firedata/02_clean.py)
   history_cell_deg: 0.05                   # history grid cell (~5 km) when the API aggregates detections itself
+firms_live:                                # newest VIIRS detections from NASA FIRMS (api/firms_live.py, #61); needs FIRMS_MAP_KEY
+  enabled: true                            # the loop also stays off without a key
+  interval_min: 30                         # fetch this often (VIIRS passes ~6 times a day over Algeria)
+  days: 2                                  # FIRMS day range per call (1-5)
+  keep_days: 14                            # live rows older than this are dropped (the archive keeps the history)
+  timeout_s: 60
+  sources: [VIIRS_SNPP_NRT, VIIRS_NOAA20_NRT, VIIRS_NOAA21_NRT]
