@@ -16,6 +16,7 @@ import argparse
 from pathlib import Path
 import pandas as pd, yaml
 import config as C
+from names import display_name
 
 REPO_CONFIG = Path(__file__).resolve().parents[2] / "config.yaml"
 SAT_NAME = {"SNPP": "S-NPP", "NOAA20": "NOAA-20", "NOAA21": "NOAA-21"}
@@ -24,9 +25,9 @@ SAT_NAME = {"SNPP": "S-NPP", "NOAA20": "NOAA-20", "NOAA21": "NOAA-21"}
 def places(export_dir):
     p = pd.read_csv(Path(export_dir).expanduser() / "places.csv",
                     usecols=["osm_id", "name", "name_ar", "name_en", "lng", "lat"])
-    # export "name" mixes scripts ("Oran ⵡⴰⵀⵔⴻⵏ وهران"); prefer the English name when there is one
-    name = p.name_en.where(p.name_en.notna() & (p.name_en.astype(str).str.strip() != ""), p.name)
-    return pd.DataFrame({"id": "osm:" + p.osm_id.astype(str), "name": name.astype(str),
+    # export "name" mixes scripts ("Oran ⵡⴰⵀⵔⴻⵏ وهران"): one name in one script (names.py)
+    name = [display_name(n, en, ar) for n, en, ar in zip(p.name, p.name_en, p.name_ar)]
+    return pd.DataFrame({"id": "osm:" + p.osm_id.astype(str), "name": name,
                          "lat": p.lat.astype(float), "lon": p.lng.astype(float),
                          "name_ar": p.name_ar.astype("string")})
 
