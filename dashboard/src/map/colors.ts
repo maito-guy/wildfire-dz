@@ -12,6 +12,9 @@ export const mapColors = {
   ink: "#1C1B1A",
   inkOnDark: "#F5F6F8", // the same lines on a dark map (DESIGN2 --text)
   safe: "#6F6A62",
+  // Model C's advice layer (#53): a cool violet, so it never reads as B's fire zones or a village status.
+  ai: "#5B3FB8",
+  aiOnDark: "#B9A6FF", // the same lines on a dark map
 } as const;
 
 // Village and alert status on the map and in the legend. SAFE is grey on purpose (DESIGN.md §3.1).

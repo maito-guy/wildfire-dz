@@ -21,6 +21,30 @@ export function fmtAge(min: number | null | undefined): string {
 
 export const fmtMinutesLeft = (m: number | null): string => (m == null ? "> 2 h" : `${m} min`);
 
+/** Arrival time for the B · AI line: "45 min", "1 h", "1 h 50"; "—" when the model has no time. */
+export function fmtArrival(m: number | null | undefined): string {
+  if (m == null) return "—";
+  if (m < 60) return `${m} min`;
+  const h = Math.floor(m / 60);
+  const r = m % 60;
+  return r === 0 ? `${h} h` : `${h} h ${String(r).padStart(2, "0")}`;
+}
+
+/** Both models' arrival side by side, e.g. "B: 45 min · AI: 1 h 50". B is the model of record; AI is advice. */
+export const fmtBothTimes = (b: number | null | undefined, ai: number | null | undefined): string =>
+  bothTimesParts(b, ai).join(" ");
+
+/** The same line in two pieces ("B: 45 min ·", "AI: 1 h 50"), so a narrow column can wrap between them. */
+export const bothTimesParts = (b: number | null | undefined, ai: number | null | undefined): [string, string] => [
+  `B: ${fmtArrival(b)} ·`,
+  `AI: ${fmtArrival(ai)}`,
+];
+
+/** Hover text for the B · AI line. C answers in steps (20, 30, 45 … 120), so 20 means "within 20 min". */
+export const BOTH_TIMES_TITLE =
+  "B: the spread model that makes the flags. AI: model C's estimate (advice only, check before acting); " +
+  "its minutes are steps, so 20 means within 20 min. — = no time from that model.";
+
 const RANK: Record<Village["status"], number> = { leave_now: 0, get_ready: 1, safe: 2 };
 
 // Most urgent first: status, then minutes left (unknown last), then distance.

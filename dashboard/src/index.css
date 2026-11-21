@@ -51,6 +51,7 @@
   --sand: oklch(0.917 0.014 84.6);
   --ok: oklch(0.621 0.141 152.6);
   --ok-text: oklch(0.478 0.108 152.6);
+  --ai: #5b3fb8; /* model C's advice layer (#53); same as mapColors.ai */
   --map-land: oklch(0.929 0.014 84.6);
   --map-sea: oklch(0.895 0.013 208.8);
 
@@ -94,6 +95,7 @@
   --sand: #12141c;
   --ok: #34d399;
   --ok-text: #34d399;
+  --ai: #b9a6ff; /* mapColors.aiOnDark */
   --map-land: #1d1f22;
   --map-sea: #0f1a20;
 
@@ -154,6 +156,7 @@
   --color-sand: var(--sand);
   --color-ok: var(--ok);
   --color-ok-text: var(--ok-text);
+  --color-ai: var(--ai);
   --color-map-land: var(--map-land);
   --color-map-sea: var(--map-sea);
 
