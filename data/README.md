@@ -13,6 +13,12 @@ Lint skips this folder on purpose. Changes go in small PRs from the `data` branc
 | 6 | `06_places_replay.py --export-dir <export>` | → `places.parquet`, `replay_passes.parquet` (API); `--events`: `events_replay.parquet` | seconds |
 | 7 | `07_holdout_dense.py` | every cell around the holdout fires → `holdout_dense.parquet`; `--events`: `events_dense.parquet` | ~1 min |
 
+**Dashboard data only (no downloads, ~10 s):** put the export in `data/algeria-fire-map-data/` and run
+`make import-export` (`EXPORT_DIR=...` for another folder). `firedata/import_export.py` writes `out/detections.parquet`
+(VIIRS, all months), runs step 6, builds `out/history_grid.parquet`, and turns the export's `cell_risk.csv` into
+`model/artifacts/risk_today.parquet` until `model.risk` (#27) writes it. A later step 2 run overwrites
+`out/detections.parquet` with the same columns (fire season only).
+
 Run it **on a laptop**: the sources block cloud sandboxes. `make data` runs all 5 in order. Check each script's
 arguments first, since the Makefile only knows the `--export` flag of step 2.
 
@@ -23,6 +29,7 @@ arguments first, since the Makefile only knows the `--export` flag of step 2.
 | `out/train.parquet` | `model/` | see `docs/contracts.md` → Data contract |
 | `out/places.parquet` | `api/impact.py` | `id, name, lat, lon` (+ optional `name_ar`); the 10,258 OSM settlements from the Algeria Fire Map export |
 | `out/replay_passes.parquet` | `api/replay.py` | `holdout, t, lat, lon` (+ optional `satellite, frp`); one row per burning cell per pass, for the 2 held-out fires |
+| `out/detections.parquet`, `out/history_grid.parquet` | `api/detections.py` | see `docs/contracts.md` (v0.5) |
 | `out/holdout_dense.parquet` | `model/villages.py` (`make evaluate`) | `train.parquet` columns + `holdout, grid_lat0, grid_lon0, grid_mlon`; every cell, not sampled |
 | `out/events_replay.parquet`, `out/events_dense.parquet` | `model/crossval.py` only | same two shapes for `config.yaml → crossval.events`; the API and training never read them |
 

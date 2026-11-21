@@ -13,8 +13,9 @@ entries short and factual. Use absolute dates (YYYY-MM-DD).
 
 - **Phase:** delivery (`RULES.md`, `PROJECT_MANAGEMENT_RULES.md` §9–13). Spec: `SPEC.md` v0.3.1.
 - **Running:** wave 4 agents on #53 (dashboard AI layer) and #17 (static terrain/fuel raster), worktrees `.claude/worktrees/{53,17}`. Data teammate's PRs merged 2026-11-21: #50 (2 h mean wind), #51 (firedata steps 1-7, model C crossval), #54 (model C advice layer, landed via #51). Closed #4 #6 #52; #5 open until the holdout bboxes are confirmed.
+- **Real data:** `make import-export` turns the Algeria Fire Map export (`data/algeria-fire-map-data/`, git-ignored) into detections, history, places, replay passes and the risk layer (D-15). `/detections /history /risk /replay` and `/health` answer `stub: false`/`real` on this machine.
 - **Next up:** #18 after #17; then #27 (needs #18) and #19/#20. #7 blocked only by #5 (bbox confirmation). #30 needs the GEE export and the 2002 dataset. #11 needs humans.
-- **Blockers:** #5 bboxes TO CONFIRM; data files live on the Drive (not on this machine), so `/health` shows stubs here; run `make export` on the demo laptop (else B uses the 10 m/min placeholder); #8 #11 need humans (design, translations).
+- **Blockers:** #5 bboxes TO CONFIRM; `model/artifacts/` (model C) lives on the Drive, not on this machine; run `make export` on the demo laptop (else B uses the 10 m/min placeholder); #8 #11 need humans (design, translations).
 
 ---
 
@@ -62,6 +63,7 @@ entries short and factual. Use absolute dates (YYYY-MM-DD).
 | D-12 | 2026-11-20 | Wave 3 builds #12 #21 #28 #29 against stub/fixture data (current placeholder texts, stub scoreboard, stub detections and risk cells, flagged `stub`); real data from #11 #4 #5 #19 #27 drops in later with no code change | Owner, nothing was unblocked |
 | D-13 | 2026-11-20 | Dashboard UI follows DESIGN1 (light: paper/ink/fire, status words) + DESIGN2 (dark glass, map full-bleed, floating panels). Light/dark toggle (kept in the browser), map view Heatmap / 3D (Esri satellite imagery on terrain, tilted) / Normal (OpenFreeMap Liberty street map, both themes). Alert Log hidden from the Villages tab. Brand is "Hareeq" with the logos in `dashboard/public/`. Each fact has one home in the UI: receivers + data age in the status pill, connection problems in the top banners, layer toggles in the Layers card only, pending count on the Approval tab | Owner |
 | D-14 | 2026-11-21 | Model C is advice next to B, not an alert maker: B creates every pending flag, C shows likely/possible zones and `ai_minutes_left`. Cross-validation (all Algerian fires): C better per cell (AUC 0.956 vs 0.896) but not yet per village, so B serves alerts | Owner, #51 #54 |
+| D-15 | 2026-11-21 | The dashboard uses the Algeria Fire Map export instead of the stubs (`data/firedata/import_export.py`, `make import-export`). Until #27, `risk_today.parquet` is the export's `cell_risk.csv` (0.1° cells split onto the 0.05° display lattice; classes very-low/low→low, very-high/extreme→very_high; `top_factors` from the export's land cover, slope and fire history, not from a model) | Owner request |
 | D-09 | 2026-11-20 | If `OPERATOR_TOKEN` is unset, write endpoints stay open and log a warning (dev mode). If it is set, the header is required (401 otherwise). The demo sets it | Wave 1 seam, coordinator default |
 
 ### 3.2 Open (waiting on the owner)
