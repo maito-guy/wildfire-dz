@@ -121,8 +121,8 @@ async def predict(req: PredictRequest):
         wind, wind_src = req.wind.model_dump(), "request"
     else:  # Open-Meteo at the fire centroid; config default on any failure
         wind, wind_src = await weather.get_wind(float(lat.mean()), float(lon.mean()), time, cfg)
-    model, reason, grid = predictor.run_model(req.model, lat, lon, wind["speed_kmh"], wind["from_deg"], cfg,
-                                              time=observed)
+    model, reason, grid = await asyncio.to_thread(      # model C (weather + boosters) never blocks the event loop
+        predictor.run_model, req.model, lat, lon, wind["speed_kmh"], wind["from_deg"], cfg, time=observed)
 
     fire_id = req.fire_id or f"fire_{next(_fire_ids):03d}"
     villages = impact.villages_at_risk(lat, lon, grid, cfg)
