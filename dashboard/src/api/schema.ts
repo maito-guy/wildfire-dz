@@ -173,7 +173,7 @@ export interface paths {
         };
         /**
          * Events
-         * @description Dashboards: flag, flag_updated, alert_sent, alert_rejected, alert_cancelled.
+         * @description Dashboards: flag, flag_updated, alert_sent, alert_rejected, alert_cancelled, resync (refetch /alerts).
          */
         get: operations["events_events_get"];
         put?: never;
@@ -411,6 +411,8 @@ export interface components {
             minutes_left: number | null;
             /** Ai Minutes Left */
             ai_minutes_left?: number | null;
+            /** Ai Opinion */
+            ai_opinion?: ("likely" | "possible" | "unlikely") | null;
             /** Distance Km */
             distance_km: number;
             /** Fire Direction */
@@ -741,6 +743,8 @@ export interface components {
             minutes_left: number | null;
             /** Ai Minutes Left */
             ai_minutes_left?: number | null;
+            /** Ai Opinion */
+            ai_opinion?: ("likely" | "possible" | "unlikely") | null;
             /**
              * Status
              * @enum {string}
