@@ -1,5 +1,5 @@
 // The fire map (DESIGN.md §9), MapLibre GL. Draw order: basemap → fire history → risk today → 2 h zone →
-// 1 h zone → burning cells → next pass → alert areas → detections → pins. Pins are HTML markers that
+// 1 h zone → AI estimate (model C, advice only) → burning cells → next pass → alert areas → detections → pins. Pins are HTML markers that
 // always carry the status word, never colour alone. A click picks a detection or history cell and opens
 // its details; in Demo mode the click starts a fire instead.
 import "maplibre-gl/dist/maplibre-gl.css";
@@ -23,6 +23,7 @@ export type LayerKey =
   | "burning"
   | "zone1h"
   | "zone2h"
+  | "ai"
   | "villages"
   | "alertAreas"
   | "nextPass"
@@ -142,6 +143,7 @@ const LAYER_IDS: Record<Exclude<LayerKey, "villages">, string[]> = {
   risk: ["risk"],
   zone2h: ["zone2h-fill", "zone2h-line"],
   zone1h: ["zone1h-fill", "zone1h-line"],
+  ai: ["ai-fill", "ai-line-possible", "ai-line-likely"],
   burning: ["burning"],
   nextPass: ["next-pass"],
   alertAreas: ["alert-areas"],
@@ -153,8 +155,9 @@ const PICK_PX = 8;
 function addLayers(map: maplibregl.Map, kind: Basemap, key: StyleKey) {
   // Ink lines (next pass, alert areas, dot outlines) turn light on a dark map, or they disappear.
   const line = key === "streets" ? mapColors.ink : mapColors.inkOnDark;
+  const ai = key === "streets" ? mapColors.ai : mapColors.aiOnDark;
   const src = (id: string) => map.addSource(id, { type: "geojson", data: geo.EMPTY });
-  ["history", "history-pts", "risk", "zones", "burning", "next-pass", "alert-areas", "detections"].forEach(src);
+  ["history", "history-pts", "risk", "zones", "ai-zones", "burning", "next-pass", "alert-areas", "detections"].forEach(src);
 
   map.addLayer({
     id: "history",
@@ -209,6 +212,27 @@ function addLayers(map: maplibregl.Map, kind: Basemap, key: StyleKey) {
     filter: ["==", ["get", "horizon"], 60],
     paint: { "line-color": mapColors.zone1hLine, "line-width": 3 },
   });
+  // Model C's advice: violet outlines, never fire colours. Likely = solid with a faint fill, possible = dashed;
+  // the 1 h lines are thicker than the 2 h ones.
+  map.addLayer({
+    id: "ai-fill",
+    type: "fill",
+    source: "ai-zones",
+    filter: ["==", ["get", "confidence"], "likely"],
+    paint: { "fill-color": ai, "fill-opacity": ["match", ["get", "horizon"], 60, 0.16, 0.08] },
+  });
+  for (const conf of ["possible", "likely"] as const)
+    map.addLayer({
+      id: `ai-line-${conf}`,
+      type: "line",
+      source: "ai-zones",
+      filter: ["==", ["get", "confidence"], conf],
+      paint: {
+        "line-color": ai,
+        "line-width": ["match", ["get", "horizon"], 60, 2.5, 1.5],
+        ...(conf === "possible" ? { "line-dasharray": [3, 2] } : {}),
+      },
+    });
   map.addLayer({
     id: "burning",
     type: "fill",
@@ -509,6 +533,7 @@ export function FireMap(p: Props) {
   // Data → sources.
   const setData = (id: string, data: GeoJSON.FeatureCollection) => (map?.getSource(id) as GeoJSONSource | undefined)?.setData(data);
   useEffect(() => void setData("zones", geo.zones(p.prediction)), [map, styleSeq, p.prediction]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => void setData("ai-zones", geo.aiZones(p.prediction)), [map, styleSeq, p.prediction]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => void setData("burning", geo.burningCells(p.burning)), [map, styleSeq, p.burning]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => void setData("next-pass", geo.nextPassCells(p.truth)), [map, styleSeq, p.truth]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => void setData("alert-areas", geo.alertAreas(p.alerts)), [map, styleSeq, p.alerts]); // eslint-disable-line react-hooks/exhaustive-deps

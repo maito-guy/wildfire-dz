@@ -1,6 +1,6 @@
 // API data → GeoJSON for the MapLibre sources (components/map/FireMap.tsx).
 import type { Feature, FeatureCollection, Point, Polygon } from "geojson";
-import type { Alert, DetectionsResponse, HistoryResponse, LatLon, PredictResponse } from "../api/client";
+import type { AiZoneFeature, Alert, DetectionsResponse, HistoryResponse, LatLon, PredictResponse } from "../api/client";
 import { zoneFeatures } from "../api/client";
 import type { RiskResponse } from "../api/risk";
 import { HISTORY_RAMP, historyBucket, splitByAge } from "../api/fireMap";
@@ -68,6 +68,26 @@ export function zones(p: PredictResponse | null): FeatureCollection {
       properties: { horizon: f.properties.horizon_min },
       geometry: f.geometry,
     })),
+  };
+}
+
+/**
+ * Model C's advice zones (#53) from `/predict` → `ai.zones`, with `horizon` = 60 | 120 and
+ * `confidence` = likely | possible. Empty when the API has no AI answer (`ai` is null).
+ * Order: possible 2 h, possible 1 h, likely 2 h, likely 1 h, so the narrower zones draw on top.
+ */
+export function aiZones(p: PredictResponse | null): FeatureCollection {
+  const features = (p?.ai?.zones as { features?: AiZoneFeature[] } | undefined)?.features ?? [];
+  const rank = (f: AiZoneFeature) => (f.properties.confidence === "likely" ? 2 : 0) + (f.properties.horizon_min === 60 ? 1 : 0);
+  return {
+    type: "FeatureCollection",
+    features: [...features]
+      .sort((a, b) => rank(a) - rank(b))
+      .map((f) => ({
+        type: "Feature",
+        properties: { horizon: f.properties.horizon_min, confidence: f.properties.confidence },
+        geometry: f.geometry,
+      })),
   };
 }
 
