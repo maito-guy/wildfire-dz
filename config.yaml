@@ -12,6 +12,7 @@ paths:
   events_replay: data/out/events_replay.parquet  # same, for crossval.events (step 6 --events); only crossval.py reads them
   events_dense: data/out/events_dense.parquet    # (step 7 --events)
   crossval_pooled: data/runs/crossval_pooled.parquet  # every cross-validation test prediction (model/crossval.py)
+  replay_ai: model/artifacts/replay_ai.parquet  # model C's advice on the replays (model/replay_ai.py, #52); none -> ai: null
   artifacts: model/artifacts               # model_c.txt, thresholds.json, scoreboard.json, features.json
   alert_texts: alert/texts.json
   risk_today: model/artifacts/risk_today.parquet  # daily risk cells from model.risk (#27, docs/contracts.md); stub cells if missing
@@ -67,6 +68,13 @@ holdouts:                                  # whole fires, never random rows. Bbo
     start: "2026-08-26"
     end: "2026-09-08"
     bbox: [5.4, 36.0, 8.0, 37.0]           # TO CONFIRM
+
+ai_layer:                                  # model C as advice next to B (#52): zones + arrival times, never alerts
+  model_tag: dza                           # C trained on Algeria only, without the holdout fires
+  likely_recall: 0.90                      # "likely" zone catches 90 % of burns (Kabylie 1 h: flags 15 % of cells)
+  possible_recall: 0.99                    # "possible" zone catches 99 % (Kabylie 1 h: 46 % of cells; B 64 %)
+  match_min: 45                            # a /predict time this close to a precomputed pass uses its answer
+  label: "AI estimate (model C), check before acting"
 
 crossval:                                  # model/crossval.py: every Algerian year is the test set once
   countries: [DZA]                         # fires that are tested (and C is trained on)
