@@ -13,6 +13,9 @@ Auto rule (runs on every /predict, per fire and village; config.yaml `status`):
   * status is sticky: it never goes back to "safe" while the fire is active
   * cancel (sent alerts only) pushes a cancel event; it does not re-arm the rule at that level
 
+A pending flag carries C's `ai_opinion` (#58); `GET /alerts?status=pending` is ordered by it (`pending_order`).
+A dashboard that falls behind on `/events` gets one `resync` event instead of the events it missed.
+
 Every action is logged (logger "api.alerts") and its time is kept on the alert
 (created_at, approved_at, rejected_at, cancelled_at).
 """
@@ -39,13 +42,20 @@ def _iso(o):
 
 
 class Broker:
-    """Fan-out of SSE events to every connected client (phones, or dashboards)."""
+    """Fan-out of SSE events to every connected client (phones, or dashboards).
 
-    def __init__(self):
+    Each client has a queue of `api.events_queue_size` events. A client that falls that far behind loses events: the
+    drop is logged and, with `resync=True` (dashboards), its queue is emptied and replaced by one `resync` event, so
+    the dashboard refetches `/alerts` and no flag is lost. Phones (`resync=False`) only log the drop.
+    """
+
+    def __init__(self, name: str = "events", resync: bool = True):
+        self.name = name
+        self.resync = resync
         self.queues: set[asyncio.Queue] = set()
 
     def subscribe(self) -> asyncio.Queue:
-        q: asyncio.Queue = asyncio.Queue(maxsize=100)
+        q: asyncio.Queue = asyncio.Queue(maxsize=int(load_config()["api"]["events_queue_size"]))
         self.queues.add(q)
         return q
 
@@ -58,7 +68,29 @@ class Broker:
             try:
                 q.put_nowait(msg)
             except asyncio.QueueFull:
-                pass
+                self._overflow(q, event)
+
+    def _overflow(self, q: asyncio.Queue, event: str) -> None:
+        if not self.resync:
+            log.warning("%s: a client's queue is full (%d), event %s dropped", self.name, q.maxsize, event)
+            return
+        dropped = 1
+        while not q.empty():
+            q.get_nowait()
+            dropped += 1
+        q.put_nowait(RESYNC)
+        log.warning("%s: a client's queue is full (%d): %d events dropped, resync sent", self.name, q.maxsize, dropped)
+
+
+RESYNC = "event: resync\ndata: {}\n\n"   # the dashboard refetches /alerts (#58)
+
+OPINION_RANK = {"likely": 0, "possible": 1, "unlikely": 2, None: 3}
+
+
+def pending_order(a: dict) -> tuple:
+    """Approval queue order (#58): C's opinion (likely, possible, unlikely, none), then B's minutes (none last)."""
+    m = a.get("minutes_left")
+    return OPINION_RANK.get(a.get("ai_opinion"), 3), m is None, m if m is not None else 0
 
 
 @lru_cache(maxsize=1)
@@ -95,8 +127,8 @@ def _now() -> dt.datetime:
 
 class AlertStore:
     def __init__(self):
-        self.broker = Broker()   # phones: /alerts/stream, sent alerts and cancels only
-        self.events = Broker()   # dashboards: /events, the whole queue
+        self.broker = Broker("alerts/stream", resync=False)   # phones: sent alerts and cancels only
+        self.events = Broker("events")                         # dashboards: the whole queue
         self.reset()
 
     def reset(self):
@@ -132,7 +164,7 @@ class AlertStore:
              "created_at": _now(), "scenario_time": scenario_time, "approved_at": None,
              "rejected_at": None, "reject_reason": None, "cancelled_at": None, "edited": False,
              "minutes_left": v.get("minutes_left"), "ai_minutes_left": v.get("ai_minutes_left"),
-             "distance_km": v.get("distance_km") or 0.0,
+             "ai_opinion": v.get("ai_opinion"), "distance_km": v.get("distance_km") or 0.0,
              "fire_direction": v.get("fire_direction", ""), "leave_toward": v.get("leave_toward", ""),
              "data_age_min": data_age_min,
              "area": {"lat": v["lat"], "lon": v["lon"], "radius_km": load_config()["api"]["alert_area_radius_km"]},
@@ -175,8 +207,8 @@ class AlertStore:
         if level in SEV and a["level"] in SEV:
             new_level = max(level, a["level"], key=SEV.get)
         new = {"level": new_level, "minutes_left": v.get("minutes_left"), "ai_minutes_left": v.get("ai_minutes_left"),
-               "distance_km": v.get("distance_km") or 0.0, "fire_direction": v.get("fire_direction", ""),
-               "leave_toward": v.get("leave_toward", ""), "data_age_min": data_age_min}
+               "ai_opinion": v.get("ai_opinion"), "distance_km": v.get("distance_km") or 0.0,
+               "fire_direction": v.get("fire_direction", ""), "leave_toward": v.get("leave_toward", ""), "data_age_min": data_age_min}
         if all(a[k] == val for k, val in new.items()):
             return a
         a.update(new, scenario_time=scenario_time, texts=render(new_level, v), source=source)

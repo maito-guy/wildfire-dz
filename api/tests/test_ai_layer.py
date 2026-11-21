@@ -71,3 +71,62 @@ def test_other_fire_or_time_gets_no_ai(client):
     fake_layer(tmp / "replay_ai.parquet")
     assert predict(c, "kabylie_2021", T + dt.timedelta(hours=3))["ai"] is None
     assert predict(c, None, T)["ai"] is None                            # live fire: new id, no precomputed answer
+
+
+# ---- C ranks B's pending flags (#58) ---------------------------------------------------------------
+
+def test_opinion_levels():
+    from api.ai_layer import opinion
+    assert opinion({"likely": 45, "possible": 30}, 120) == "likely"
+    assert opinion({"likely": None, "possible": 120}, 120) == "possible"
+    assert opinion({"likely": 150, "possible": 130}, 120) == "unlikely"     # C reaches it, but after 2 h
+    assert opinion(None, 120) == "unlikely"                                # no C cell under the village
+
+
+def pending(c):
+    return c.get("/alerts", params={"status": "pending"}).json()
+
+
+def predict_big(c):
+    """A 5 x 5 cell fire in a strong wind: B flags about a dozen villages."""
+    burning = [{"lat": LAT + i * 0.004, "lon": LON + j * 0.004} for i in range(-2, 3) for j in range(-2, 3)]
+    r = c.post("/predict", json={"fire_id": "kabylie_2021", "time": T.isoformat(), "model": "B",
+                                 "wind": {"speed_kmh": 60, "from_deg": 270}, "burning": burning})
+    assert r.status_code == 200, r.text
+
+
+def test_no_file_means_no_opinion_and_b_order(client):
+    c, _ = client
+    predict_big(c)
+    v = c.get("/villages/at-risk", params={"fire_id": "kabylie_2021"}).json()["villages"]
+    assert v and all(x["ai_opinion"] is None for x in v)
+    flags = pending(c)
+    assert flags and all(a["ai_opinion"] is None for a in flags)
+    mins = [a["minutes_left"] for a in flags]
+    assert mins == sorted(mins)                                           # B's minutes, as before
+
+
+def test_c_ranks_b_flags_and_keeps_every_one(client):
+    c, tmp = client
+    predict_big(c)
+    before = pending(c)
+    assert len(before) >= 4
+    c.post("/reset")
+    # C's cells under B's flagged villages, in turn: likely, possible, C reaches it too late, no cell at all
+    rows = []
+    for i, a in enumerate(before):
+        kind = i % 4
+        if kind < 3:
+            rows.append({"lat": a["area"]["lat"], "lon": a["area"]["lon"],
+                         "likely_min": [30.0, np.nan, 200.0][kind], "possible_min": [20.0, 90.0, 180.0][kind]})
+    pd.DataFrame(rows).assign(holdout="kabylie_2021", t=pd.Timestamp(T)).to_parquet(tmp / "replay_ai.parquet")
+    predict_big(c)
+    after = pending(c)
+    assert {a["village_id"] for a in after} == {a["village_id"] for a in before}   # nothing dropped, nothing added
+    want = {a["village_id"]: ["likely", "possible", "unlikely", "unlikely"][i % 4] for i, a in enumerate(before)}
+    assert {a["village_id"]: a["ai_opinion"] for a in after} == want
+    rank = {"likely": 0, "possible": 1, "unlikely": 2}
+    keys = [(rank[a["ai_opinion"]], a["minutes_left"]) for a in after]
+    assert keys == sorted(keys)                                           # opinion first, then B's minutes
+    v = c.get("/villages/at-risk", params={"fire_id": "kabylie_2021"}).json()["villages"]
+    assert all(x["ai_opinion"] in rank for x in v)                        # C answered: every village has an opinion
