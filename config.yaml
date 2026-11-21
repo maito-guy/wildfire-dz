@@ -185,6 +185,8 @@ model:
 api:
   default_model: auto                      # auto = C if exported and features available, else B
   alert_area_radius_km: 5                  # simulated cell-broadcast area around a village
+  events_queue_size: 2000                  # SSE events kept per client (/events, /alerts/stream); one replay /predict
+                                           # makes ~170 flags. A dashboard further behind gets `resync` (#58)
 
 forecast:                                  # Open-Meteo wind for /predict when the request carries no wind (api/weather.py)
   forecast_url: https://api.open-meteo.com/v1/forecast
