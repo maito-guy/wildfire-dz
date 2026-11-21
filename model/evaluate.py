@@ -2,8 +2,8 @@
 
   python -m model.evaluate            # uses every model_c_<tag>.txt found in artifacts/
 
-Cell metrics only for now (1 h, short pairs). Village metrics (missed villages, lead time,
-false-alarm villages) need the replay evaluator and stay null = "not measured yet".
+Cell metrics on 1 h short pairs. Village metrics (missed villages, lead time, time error,
+false-alarm villages) come from model/villages.py when replay_passes and places exist.
 """
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ import numpy as np
 import pandas as pd
 
 from core.config import load_config, repo_path
-from model import baselines
+from model import baselines, villages
 from model.features import load_table, split, to_matrix
 
 WEATHER_NOTE = ("Training and evaluation weather is ERA5 reanalysis, i.e. a perfect forecast. "
@@ -64,6 +64,26 @@ def village_metrics_placeholder() -> dict:
             "status": NOT_MEASURED}
 
 
+def ship_decision(vill: dict, boosters: dict) -> dict | str:
+    """Per C: beats B if, on every holdout, missed villages <= B and median lead >= B, and is
+    strictly better on at least one of them somewhere."""
+    if not vill or not boosters:
+        return NOT_MEASURED
+    out = {}
+    for tag in boosters:
+        ok, strict = True, False
+        for res in vill.values():
+            b, c = res.get("B", {}), res.get(f"C_{tag}", {})
+            if c.get("missed_villages") is None or c.get("median_lead_min") is None \
+                    or b.get("median_lead_min") is None:
+                ok = False
+                break
+            ok &= c["missed_villages"] <= b["missed_villages"] and c["median_lead_min"] >= b["median_lead_min"]
+            strict |= c["missed_villages"] < b["missed_villages"] or c["median_lead_min"] > b["median_lead_min"]
+        out[f"C_{tag}"] = "beats B: ship" if ok and strict else "does not beat B: keep B"
+    return out
+
+
 def short_only(df: pd.DataFrame, cfg: dict) -> pd.DataFrame:
     return df[df[cfg["columns"]["kind"]] == cfg["model"]["kind_for_1h"]]
 
@@ -93,6 +113,11 @@ def evaluate(cfg: dict, table: str | None = None) -> dict:
         thresholds[f"C_{tag}"] = {"prob": float(np.quantile(p_pos, 1 - cfg["safety"]["target_recall"]))}
         boosters[tag] = (b, feats)
 
+    vill = villages.evaluate_villages(cfg, thresholds, boosters)
+
+    def village(key: str, m: str) -> dict:
+        return vill.get(key, {}).get(m) or village_metrics_placeholder()
+
     board = {"generated_at": dt.datetime.now(dt.UTC).isoformat(timespec="seconds"),
              "weather_note": WEATHER_NOTE, "horizon": "1h, pairs 20-120 min apart",
              "thresholds": thresholds, "fires": []}
@@ -107,17 +132,17 @@ def evaluate(cfg: dict, table: str | None = None) -> dict:
             for m in ("A", "B"):
                 need = baselines.required_rate(hdf, m, cfg)
                 flagged = need <= thresholds[m]["rate_m_per_min"]
-                entry["models"][m] = cell_metrics(hdf, flagged, cfg) | village_metrics_placeholder()
+                entry["models"][m] = cell_metrics(hdf, flagged, cfg) | village(key, m)
                 entry["matched_recall"][m] = matched_recall(hdf, -need, cfg)  # lower rate needed = more at risk
             for tag, (b, feats) in boosters.items():
                 prob = b.predict(to_matrix(hdf, [f for f in feats if f != "is_short"], cfg)[feats])
                 flagged = prob >= thresholds[f"C_{tag}"]["prob"]
-                entry["models"][f"C_{tag}"] = cell_metrics(hdf, flagged, cfg) | village_metrics_placeholder()
+                entry["models"][f"C_{tag}"] = cell_metrics(hdf, flagged, cfg) | village(key, f"C_{tag}")
                 entry["matched_recall"][f"C_{tag}"] = matched_recall(hdf, prob, cfg)
         board["fires"].append(entry)
 
     board["ship_c"] = {"rule": "C ships only if it beats B on missed villages and lead time",
-                       "decision": NOT_MEASURED}
+                       "decision": ship_decision(vill, boosters)}
     (art / "thresholds.json").write_text(json.dumps(thresholds, indent=2))
     (art / "scoreboard.json").write_text(json.dumps(board, indent=2))
     print(json.dumps(board, indent=2))

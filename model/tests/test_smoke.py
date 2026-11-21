@@ -40,6 +40,8 @@ def make_cfg(tmp_path):
     synthetic_table().to_parquet(table)
     cfg["paths"]["train_table"] = str(table)
     cfg["paths"]["artifacts"] = str(tmp_path / "artifacts")
+    for k in ("replay_passes", "places", "holdout_dense"):   # never read the real data/out files
+        cfg["paths"][k] = str(tmp_path / f"missing_{k}.parquet")
     cfg["model"]["lgbm"]["num_boost_round"] = 30
     return cfg
 

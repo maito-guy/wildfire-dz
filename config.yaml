@@ -8,6 +8,7 @@ paths:
   replay_passes: data/out/replay_passes.parquet  # held-out fire passes (see docs/contracts.md); falls back to a synthetic fire
   detections: data/out/detections.parquet  # VIIRS detections for the fire map (#29); falls back to stub detections
   history_grid: data/out/history_grid.parquet  # pre-aggregated fire history (#29); else built from detections, else stub
+  holdout_dense: data/out/holdout_dense.parquet  # every cell around the holdout fires (data step 7), to score C on villages
   artifacts: model/artifacts               # model_c.txt, thresholds.json, scoreboard.json, features.json
   alert_texts: alert/texts.json
   risk_today: model/artifacts/risk_today.parquet  # daily risk cells from model.risk (#27, docs/contracts.md); stub cells if missing
