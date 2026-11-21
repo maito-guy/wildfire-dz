@@ -6,6 +6,11 @@
 data/out/
 data/raw/
 data/cache/
+data/cache_weather/
+data/cache_static/
+data/raw_firms/
+data/boundaries/
+data/*.log
 *.parquet
 *.csv
 *.tif

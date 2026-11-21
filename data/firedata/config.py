@@ -19,6 +19,11 @@ YEARS = range(2012, 2027)        # VIIRS S-NPP starts Jan 2012
 MONTHS = (6, 7, 8, 9, 10)        # fire season only; widen if you want more data
 SOURCE_PREFIXES = ("VIIRS_SNPP", "VIIRS_NOAA20", "VIIRS_NOAA21")  # 375 m sensors only
 
+# Borders used to download by box and to label each detection with its real country
+BOUNDARIES_URL = ("https://raw.githubusercontent.com/nvkelso/natural-earth-vector/v5.1.2/"
+                  "geojson/ne_10m_admin_0_countries.geojson")
+COAST_TOL_DEG = 0.03   # ~3 km: coastal detections just outside the simplified coastline
+
 # Only northern Algeria (Sahara detections are mostly industrial). Other countries: no cut.
 DZA_MIN_LAT = 34.5
 
