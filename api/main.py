@@ -15,7 +15,7 @@ from fastapi import Body, Depends, FastAPI, Header, HTTPException, Request
 from fastapi.responses import RedirectResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
-from api import cap, detections, impact, predictor, replay, weather
+from api import ai_layer, cap, detections, impact, predictor, replay, weather
 from api import scoreboard as scoreboard_file
 from api.alerts import LANGS, Broker, store
 from api.schemas import (
@@ -115,6 +115,10 @@ async def predict(req: PredictRequest):
 
     fire_id = req.fire_id or f"fire_{next(_fire_ids):03d}"
     villages = impact.villages_at_risk(lat, lon, grid, cfg)
+    ai = ai_layer.lookup(fire_id, time, cfg)            # model C's advice on replays (#52); never creates flags
+    ai_min = ai_layer.village_minutes(villages, ai, cfg)
+    for v in villages:
+        v["ai_minutes_left"] = ai_min.get(v["id"])
     FIRES[fire_id] = {"lat": lat, "lon": lon, "grid": grid, "time": time, "data_age_min": age,
                       "villages": villages}
     store.apply_rules(fire_id, villages, time, age)
@@ -122,7 +126,7 @@ async def predict(req: PredictRequest):
         fire_id=fire_id, time=time, observed_at=observed, model=model, fallback_reason=reason,
         data_age_min=age, data_stale=age > cfg["data_age"]["stale_banner_min"], wind=wind,
         wind_source=wind_src, embers_applied=grid["embers_applied"],
-        zones=predictor.zones_geojson(grid), cells=predictor.cells_list(grid),
+        zones=predictor.zones_geojson(grid), cells=predictor.cells_list(grid), ai=ai_layer.public(ai),
     )
 
 

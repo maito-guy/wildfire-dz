@@ -336,6 +336,29 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /**
+         * AiLayer
+         * @description Model C's advice next to B (#52). Never creates flags. Only on replays for now; None elsewhere.
+         */
+        AiLayer: {
+            /** Model */
+            model: string;
+            /** Label */
+            label: string;
+            /**
+             * Time
+             * Format: date-time
+             */
+            time: string;
+            /** Likely Recall */
+            likely_recall: number | null;
+            /** Possible Recall */
+            possible_recall: number | null;
+            /** Zones */
+            zones: {
+                [key: string]: unknown;
+            };
+        };
         /** Alert */
         Alert: {
             /** Id */
@@ -386,6 +409,8 @@ export interface components {
             edited: boolean;
             /** Minutes Left */
             minutes_left: number | null;
+            /** Ai Minutes Left */
+            ai_minutes_left?: number | null;
             /** Distance Km */
             distance_km: number;
             /** Fire Direction */
@@ -594,6 +619,7 @@ export interface components {
             };
             /** Cells */
             cells: components["schemas"]["Cell"][];
+            ai?: components["schemas"]["AiLayer"] | null;
         };
         /** RiskCell */
         RiskCell: {
@@ -685,6 +711,8 @@ export interface components {
             distance_km: number;
             /** Minutes Left */
             minutes_left: number | null;
+            /** Ai Minutes Left */
+            ai_minutes_left?: number | null;
             /**
              * Status
              * @enum {string}
