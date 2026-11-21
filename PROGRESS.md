@@ -12,7 +12,7 @@ entries short and factual. Use absolute dates (YYYY-MM-DD).
 ## 1. Current state
 
 - **Phase:** delivery (`RULES.md`, `PROJECT_MANAGEMENT_RULES.md` §9–13). Spec: `SPEC.md` v0.3.1.
-- **Running:** wave 5 (2026-11-21): #58 merged (PR #66, closed; real Kabylie replay with `replay_ai.parquet` still to check on the laptop). #59 (approval queue groups) in progress. #20 PR #67 (model C in `/predict`, coded against a test booster; real artifacts on the Drive). #59 waits on #58.
+- **Running:** wave 5 (2026-11-21): #58 merged (PR #66, closed; real Kabylie replay with `replay_ai.parquet` still to check on the laptop). #59 (approval queue groups) in progress. #20 merged (PR #67, model C in `/predict`, coded against a test booster; check with the real artifacts from the Drive).
 - **Merged 2026-11-21:** #63 (place names, #62), #64 (live FIRMS every 30 min, #61), #65 (FWI cap on the risk layer, closed #57), #60 (shared feature builder `core/features.py`, closed #18; Q-05 answered yes, steps 5/7 take `--terrain raster`). #17 stays open until `static_375m.npz` is on the Drive.
 - **Real data:** `make import-export` turns the Algeria Fire Map export (`data/algeria-fire-map-data/`, git-ignored) into detections, history, places, replay passes and the risk layer (D-15). `/detections /history /risk /replay` and `/health` answer `stub: false`/`real` on this machine.
 - **Next up:** rebuild `train.parquet` with `--terrain raster` and retrain C (data teammate, local data); #27, #19. #7 blocked only by #5 (bbox confirmation). #30 needs the GEE export and the 2002 dataset. #11 needs humans.
@@ -70,6 +70,7 @@ entries short and factual. Use absolute dates (YYYY-MM-DD).
 | D-14 | 2026-11-21 | Model C is advice next to B, not an alert maker: B creates every pending flag, C shows likely/possible zones and `ai_minutes_left`. Cross-validation (all Algerian fires): C better per cell (AUC 0.956 vs 0.896) but not yet per village, so B serves alerts | Owner, #51 #54 |
 | D-15 | 2026-11-21 | The dashboard uses the Algeria Fire Map export instead of the stubs (`data/firedata/import_export.py`, `make import-export`). Until #27, `risk_today.parquet` is the export's `cell_risk.csv` (0.1° cells split onto the 0.05° display lattice; classes very-low/low→low, very-high/extreme→very_high; `top_factors` from the export's land cover, slope and fire history, not from a model) | Owner request |
 | D-16 | 2026-11-21 | Q-05: model C trains on the static raster's terrain/fuel (`--terrain raster`), so training matches prediction time | #60 |
+| D-17 | 2026-11-21 | From now on, finished work is committed and pushed straight to `dev`, with no PR. CI on `dev` must stay green; `main` stays the owner's | Owner request |
 | D-09 | 2026-11-20 | If `OPERATOR_TOKEN` is unset, write endpoints stay open and log a warning (dev mode). If it is set, the header is required (401 otherwise). The demo sets it | Wave 1 seam, coordinator default |
 
 ### 3.2 Open (waiting on the owner)
