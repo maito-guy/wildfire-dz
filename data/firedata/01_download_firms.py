@@ -7,12 +7,19 @@ near-real-time (NRT) for recent months. Resumable: finished windows are skipped.
     python 01_download_firms.py
 """
 import io, sys, time, datetime as dt
+from concurrent.futures import ThreadPoolExecutor
 import pandas as pd, requests
 import config as C
 import boundaries
 
 API = "https://firms.modaps.eosdis.nasa.gov/api"
-BUDGET_PER_10MIN = 4500   # FIRMS allows 5,000 transactions per 10 min per key; each day = 1
+BUDGET_PER_10MIN = 4000   # FIRMS allows 5,000 transactions per 10 min per key; each day = 1
+                          # (headroom for other use of the key; the window is rolling)
+WORKERS = 4               # parallel requests; the server's response time is the bottleneck
+
+
+class BadRequest(Exception):
+    pass
 
 
 def availability(key):
@@ -68,31 +75,54 @@ def main():
                     out = C.RAW_FIRMS / f"{country}_{sid}_{d}_{n}.csv"
                     if not out.exists():
                         jobs.append((country, sid, d, n, out))
-    print(f"{len(jobs)} windows to download", flush=True)
-    spent, t0 = 0, time.time()
-    for i, (country, sid, d, n, out) in enumerate(jobs, 1):
-        if spent + n > BUDGET_PER_10MIN:          # stay under the rate limit
-            wait = max(0, 600 - (time.time() - t0)) + 5
-            print(f"  rate limit: sleeping {wait:.0f}s", flush=True); time.sleep(wait)
-            spent, t0 = 0, time.time()
+    print(f"{len(jobs)} windows to download, {WORKERS} at a time", flush=True)
+
+    def fetch(job):
+        country, sid, d, n, out = job
         url = f"{API}/area/csv/{key}/{sid}/{boxes[country]}/{n}/{d}"
-        for attempt in range(4):
+        for attempt in range(6):
             try:
                 r = requests.get(url, timeout=120)
-                if r.status_code == 200 and not r.text.lower().startswith(("invalid", "exceeding")):
-                    break
+                txt = r.text.lower()
+                if r.status_code == 200 and not txt.startswith(("invalid", "exceeding")):
+                    tmp = out.with_suffix(".part"); tmp.write_text(r.text); tmp.replace(out)
+                    return True
                 print(f"  {r.status_code} {r.text[:80]!r}", flush=True)
-                if r.text.lower().startswith("invalid"):   # a bad request never fixes itself
-                    sys.exit(f"FIRMS rejected {url.replace(key, '<key>')}: {r.text[:120]}")
+                # over the 10-min cap FIRMS answers "Exceeding..." and also "Invalid MAP_KEY."
+                # (the key was already checked by the availability call): wait it out
+                if txt.startswith(("exceeding", "invalid map_key")):
+                    time.sleep(120); continue
+                if txt.startswith("invalid"):   # a bad request never fixes itself
+                    raise BadRequest(f"FIRMS rejected {url.replace(key, '<key>')}: {r.text[:120]}")
             except requests.RequestException as e:
                 print("  error", e, flush=True)
             time.sleep(10 * (attempt + 1))
-        else:
-            print(f"  giving up on {out.name}; rerun the script later", flush=True); continue
-        tmp = out.with_suffix(".part"); tmp.write_text(r.text); tmp.replace(out)
-        spent += n
-        if i % 50 == 0 or i == len(jobs):
-            print(f"{i}/{len(jobs)} done ({country} {sid} {d})", flush=True)
+        print(f"  giving up on {out.name}; rerun the script later", flush=True)
+        return False
+
+    # batches that fit the 10-minute transaction budget; each batch runs WORKERS requests at once
+    batches, cur, cost = [], [], 0
+    for j in jobs:
+        if cost + j[3] > BUDGET_PER_10MIN:
+            batches.append(cur); cur, cost = [], 0
+        cur.append(j); cost += j[3]
+    if cur:
+        batches.append(cur)
+    done = 0
+    with ThreadPoolExecutor(WORKERS) as pool:
+        for b, batch in enumerate(batches):
+            t0 = time.time()
+            try:
+                for job, ok in zip(batch, pool.map(fetch, batch)):
+                    done += 1
+                    if done % 100 == 0 or done == len(jobs):
+                        print(f"{done}/{len(jobs)} done ({job[0]} {job[1]} {job[2]})", flush=True)
+            except BadRequest as e:
+                pool.shutdown(cancel_futures=True)
+                sys.exit(str(e))
+            if b < len(batches) - 1:                  # stay under the rate limit
+                wait = max(0, 600 - (time.time() - t0)) + 5
+                print(f"  rate limit: sleeping {wait:.0f}s", flush=True); time.sleep(wait)
 
 
 if __name__ == "__main__":

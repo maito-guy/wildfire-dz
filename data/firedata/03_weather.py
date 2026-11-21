@@ -14,7 +14,10 @@ def fetch(lat, lon, start, end):
                   end_date=str(end), hourly=",".join(C.WEATHER_VARS), timezone="UTC",
                   wind_speed_unit="kmh")
     for attempt in range(6):
-        r = requests.get(C.OPEN_METEO_URL, params=params, timeout=60)
+        try:
+            r = requests.get(C.OPEN_METEO_URL, params=params, timeout=60)
+        except requests.RequestException as e:        # timeouts, dropped connections
+            print("  error", e, flush=True); time.sleep(5 * (attempt + 1)); continue
         if r.status_code == 200:
             return r.json()
         if r.status_code == 429:                       # rate limited
