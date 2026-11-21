@@ -12,10 +12,10 @@ entries short and factual. Use absolute dates (YYYY-MM-DD).
 ## 1. Current state
 
 - **Phase:** delivery (`RULES.md`, `PROJECT_MANAGEMENT_RULES.md` §9–13). Spec: `SPEC.md` v0.3.1.
-- **Running:** wave 5 (2026-11-21): #58 (model C ranks pending flags + `/events` resync) and #20 (model C in `/predict`, coded against a test booster; real artifacts on the Drive). #59 waits on #58.
+- **Running:** wave 5 (2026-11-21): #58 merged (PR #66, closed; real Kabylie replay with `replay_ai.parquet` still to check on the laptop). #59 (approval queue groups) in progress. #20 PR #67 (model C in `/predict`, coded against a test booster; real artifacts on the Drive). #59 waits on #58.
 - **Merged 2026-11-21:** #63 (place names, #62), #64 (live FIRMS every 30 min, #61), #65 (FWI cap on the risk layer, closed #57), #60 (shared feature builder `core/features.py`, closed #18; Q-05 answered yes, steps 5/7 take `--terrain raster`). #17 stays open until `static_375m.npz` is on the Drive.
 - **Real data:** `make import-export` turns the Algeria Fire Map export (`data/algeria-fire-map-data/`, git-ignored) into detections, history, places, replay passes and the risk layer (D-15). `/detections /history /risk /replay` and `/health` answer `stub: false`/`real` on this machine.
-- **Next up:** #59 after #58; rebuild `train.parquet` with `--terrain raster` and retrain C (data teammate, local data); #27, #19. #7 blocked only by #5 (bbox confirmation). #30 needs the GEE export and the 2002 dataset. #11 needs humans.
+- **Next up:** rebuild `train.parquet` with `--terrain raster` and retrain C (data teammate, local data); #27, #19. #7 blocked only by #5 (bbox confirmation). #30 needs the GEE export and the 2002 dataset. #11 needs humans.
 - **Blockers:** #5 bboxes TO CONFIRM; `model/artifacts/` (model C) lives on the Drive, not on this machine; run `make export` on the demo laptop (else B uses the 10 m/min placeholder); #8 #11 need humans (design, translations).
 
 ---
@@ -43,6 +43,8 @@ entries short and factual. Use absolute dates (YYYY-MM-DD).
 | C-18 | Docker: `make docker-up` (= `docker compose up -d --build`) serves everything on `${PORT:-8000}`. `.env` read at runtime; `data/out` and `model/artifacts` mounted read-only, so new files need `docker compose restart`, not a rebuild. CI job `docker` builds the image | #40 |
 | C-13 | `/predict` wind: request → Open-Meteo forecast (within `forecast.past_days` = 10 days) → ERA5 archive (older) → `weather_default`. Vector mean of the nearest hour and the next `forecast.mean_hours` (2), like the training feature `wind_speed_2h`. Cached per (lat, lon, hour) for 15 min; failures are not cached | #35 |
 | C-19 | Terrain and fuel for any cell come from `core/static_raster.py` (`load`/`lookup`/`lookup_many`, `train.parquet` column names) reading `paths.static_raster` (`data/out/static_375m.npz`), built by `make static-raster` (resumable, `--shard i/4`, ~25 min whole bbox). One fire-style grid over `config.yaml → static_raster.bbox`. Only a 404 tile is sea. `rasterio` + `requests` are dev dependencies | #56 |
+| C-21 | `ai_opinion` = model C's view of a village: likely (C's likely zone within 2 h), possible, unlikely (C ran for this pass, village outside both), null (no C for this fire). `GET /alerts?status=pending` orders by opinion, then `minutes_left` (null last). C never creates, drops or rejects a flag | #58 |
+| C-22 | SSE queues hold `api.events_queue_size` (2000) events per client. An `/events` client that falls behind gets one `resync` event and must refetch `/alerts`; on `/alerts/stream` an overflow is only logged | #58 |
 | C-20 | Model C's advice is violet (`mapColors.ai`/`aiOnDark`, CSS `--ai`): solid = likely, dashed = possible, 1 h thicker than 2 h. One toggle in the Layers card, disabled when `ai` is null. Times read "B: … · AI: …" (`fmtBothTimes`/`bothTimesParts` in `format.ts`) | #55 |
 
 ---
@@ -92,7 +94,7 @@ entries short and factual. Use absolute dates (YYYY-MM-DD).
 
 ## 5. Milestone log
 
-- 2026-11-21: Merged #63 #64 #65 #60; closed #18 #57. Wave 5 started (#58, #20).
+- 2026-11-21: Merged #63 #64 #65 #60; closed #18 #57. Wave 5 started (#58, #20); #58 merged (PR #66).
 - 2026-11-20: Wave 2 complete: #10 phone page (PR #43), #25 approval queue (PR #44), #40 Docker (PR #45) merged.
 - 2026-11-20: Wave 2: #15 status bar (PR #41) and #39 Turborepo (PR #42) merged; #25 and #10 started without mockups (D-11); #40 Docker started.
 - 2026-11-20: Wave 1 done: #26 CAP (PR #37) and #32 React dashboard (PR #38) merged. Created #39 Turborepo and #40 Docker (owner request).
