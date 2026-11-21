@@ -99,7 +99,7 @@ def _utc(t: dt.datetime | None) -> dt.datetime:
 async def health():
     return {"ok": True, "fires": len(FIRES), "phones_connected": len(store.broker.queues),
             "dashboards_connected": len(store.events.queues), "pending_alerts": store.pending_count(),
-            "model_c_exported": bool(predictor.manifest().get("model_c")),
+            "model_c_exported": predictor.model_c_status()[0],
             "places": "real" if impact.real_places() is not None else "stub",
             "replay": "real" if not replay.list_fires()[0]["stub"] else "stub",
             "firms_live": firms_live.public_status()}
@@ -121,7 +121,8 @@ async def predict(req: PredictRequest):
         wind, wind_src = req.wind.model_dump(), "request"
     else:  # Open-Meteo at the fire centroid; config default on any failure
         wind, wind_src = await weather.get_wind(float(lat.mean()), float(lon.mean()), time, cfg)
-    model, reason, grid = predictor.run_model(req.model, lat, lon, wind["speed_kmh"], wind["from_deg"], cfg)
+    model, reason, grid = predictor.run_model(req.model, lat, lon, wind["speed_kmh"], wind["from_deg"], cfg,
+                                              time=observed)
 
     fire_id = req.fire_id or f"fire_{next(_fire_ids):03d}"
     villages = impact.villages_at_risk(lat, lon, grid, cfg)
