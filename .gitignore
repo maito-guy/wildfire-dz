@@ -48,4 +48,5 @@ dashboard/dist/
 .turbo/
 
 # local runs and quarantined downloads
+data/runs/
 data/cache_static_bad/

@@ -6,7 +6,7 @@ PY ?= .venv/bin/python
 PORT ?= 8000
 EXPORT ?= $(HOME)/Downloads/algeria-fire-map-data/detections.csv
 
-.PHONY: help setup dev api dashboard-dev dashboard-build test lint fmt check-columns train train-dza train-dza-nowind evaluate export model data lan-ip demo-check docker-up docker-down docker-logs
+.PHONY: help setup dev api dashboard-dev dashboard-build test lint fmt check-columns train train-dza train-dza-nowind evaluate crossval export model data lan-ip demo-check docker-up docker-down docker-logs
 
 help:            ## list targets
 	@grep -E '^[a-z-]+:.*##' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-14s %s\n", $$1, $$2}'
@@ -54,10 +54,13 @@ train-dza-nowind: ## model C, Algeria only, no wind features (wind-scenario blen
 evaluate:        ## thresholds + scoreboard on held-out fires
 	$(PY) -m model.evaluate
 
+crossval:        ## every Algerian year tested once (B tuned on all vs DZA, and C)
+	$(PY) -m model.crossval
+
 export:          ## publish artifacts for the API (TAG=mixed to ship C)
 	$(PY) -m model.export $(if $(TAG),--tag $(TAG),)
 
-model: train train-dza train-dza-nowind evaluate   ## full model loop
+model: train train-dza train-dza-nowind evaluate crossval   ## full model loop
 
 data:            ## run the firedata pipeline (laptop only; see data/README.md)
 	cd data/firedata && export FIREDATA_DIR=.. && ../../$(PY) 01_download_firms.py \

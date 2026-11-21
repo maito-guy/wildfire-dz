@@ -207,6 +207,8 @@ def evaluate(cfg: dict, table: str | None = None) -> dict:
     df = load_table(cfg, table)
     tr, va, holdouts = split(df, cfg)
     fit = short_only(pd.concat([tr, va]), cfg)
+    if cfg["model"].get("baseline_countries"):       # B serves Algeria: optionally tune its rate there only
+        fit = fit[fit[cfg["columns"]["country"]].isin(cfg["model"]["baseline_countries"])]
     art = repo_path(cfg["paths"]["artifacts"])
     art.mkdir(parents=True, exist_ok=True)
 

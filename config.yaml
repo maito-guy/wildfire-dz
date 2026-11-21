@@ -65,6 +65,50 @@ holdouts:                                  # whole fires, never random rows. Bbo
     end: "2026-09-08"
     bbox: [5.4, 36.0, 8.0, 37.0]           # TO CONFIRM
 
+crossval:                                  # model/crossval.py: every Algerian year is the test set once
+  countries: [DZA]                         # fires that are tested (and C is trained on)
+  n_seeds: 1                               # 1 booster per fold (speed); the shipped C averages model.n_seeds
+  regions:                                 # longitude bands, for "does it work in the west too?"
+    west: [-9.0, 2.0]
+    centre: [2.0, 5.5]
+    east: [5.5, 9.0]
+  events:                                  # big fires reported by name. Same format as holdouts. Bboxes are
+    jijel_guelma_2026:                     # ~0.5 deg around the biggest fires in data/out/fires.parquet: TO CONFIRM
+      name: "Jijel / Guelma, Aug 2026"
+      start: "2026-08-22"
+      end: "2026-09-08"
+      bbox: [5.4, 36.0, 8.0, 37.0]
+    kabylie_2021:
+      name: "Kabylie, Aug 2021"
+      start: "2021-08-05"
+      end: "2021-08-16"
+      bbox: [3.5, 36.2, 5.3, 37.0]
+    el_tarf_2026:
+      name: "El Tarf / Souk Ahras, Jul 2026"
+      start: "2026-07-14"
+      end: "2026-07-26"
+      bbox: [6.8, 36.2, 8.7, 37.2]
+    batna_2012:
+      name: "Batna / Khenchela (Aures), Aug 2012"
+      start: "2012-08-01"
+      end: "2012-08-22"
+      bbox: [6.2, 34.7, 7.3, 35.6]
+    bejaia_bouira_2023:
+      name: "Bejaia / Bouira, Jul 2023"
+      start: "2023-07-20"
+      end: "2023-07-28"
+      bbox: [3.0, 36.1, 5.3, 37.0]
+    tlemcen_2026:
+      name: "Tlemcen, Jul 2026"
+      start: "2026-07-13"
+      end: "2026-07-26"
+      bbox: [-2.0, 34.3, -0.6, 35.2]
+    aures_2021:
+      name: "Batna (Aures), Jul 2021"
+      start: "2021-07-03"
+      end: "2021-07-12"
+      bbox: [6.3, 35.0, 7.4, 35.7]
+
 columns:                                   # names in train.parquet; check with `make check-columns`
   label: label
   weight: weight
@@ -83,6 +127,9 @@ columns:                                   # names in train.parquet; check with 
 
 model:
   kind_for_1h: short                       # pairs 20-120 min apart train the 1 h model
+  baseline_countries: null                 # B/A spread rate tuned on these countries' fires (null = all in the
+                                           # table). Keep null: crossval 2026-11-21, [DZA] caught only 93.7 % of
+                                           # burned cells (79 % in 2023, 85 % in 2026) vs 97.7 % for all countries.
   baseline_a:
     rate_m_per_min: 15.0                   # PLACEHOLDER; evaluate.py tunes it to hit target_recall
   baseline_b:
