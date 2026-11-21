@@ -157,6 +157,17 @@ class RiskPlace(BaseModel):
     alert_status: AlertStatus
 
 
+class FireWeather(BaseModel):
+    date: str                                  # the day the FWI is for (= RiskResponse.date)
+    source: Literal["forecast", "reanalysis"]  # Open-Meteo forecast API or ERA5 archive
+    value: float                               # FWI at the worst weather point
+    level: Literal["very_low", "low", "moderate", "high", "very_high", "extreme"]   # class of `value` (EFFIS)
+    median: float                              # median FWI over the weather points
+    points: int                                # weather points used (those nearest a risk cell)
+    step_deg: float                            # weather point spacing (risk.fwi.step_deg)
+    capped_cells: int                          # file cells whose level was lowered by the cap
+
+
 class RiskResponse(BaseModel):
     date: str                                  # YYYY-MM-DD, the day the risk is for
     stub: bool                                 # true = fake cells, risk_today.parquet is missing
@@ -165,6 +176,8 @@ class RiskResponse(BaseModel):
     flag_level: RiskLevel                      # places near cells at this level are flagged
     cells: list[RiskCell]                      # levels >= risk.min_level_shown, highest score first
     places: list[RiskPlace]                    # flagged places, highest score first
+    fwi: FireWeather | None = None             # the day's fire weather that capped the levels; null = no cap
+    fwi_note: str | None = None                # why there is no cap (weather unavailable), else null
 
 
 # --- Fire map (#29): GET /detections, GET /history ---------------------------------------------------

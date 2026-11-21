@@ -273,7 +273,10 @@ from api.schemas import RiskResponse  # noqa: E402
 async def risk_today():
     """Today's risk cells (simplified) and very-high-risk places; creates their preventive flags once a day."""
     try:
-        return risk.today()
+        cfg = risk.load_config()
+        loaded = risk.load(cfg)
+        fw = await risk.fetch_weather(loaded[0], cfg)   # the day's fire weather caps the levels (#57)
+        return risk.today(cfg, fw=fw, loaded=loaded)
     except ValueError as e:  # malformed risk file: say so instead of a bare 500
         raise HTTPException(500, str(e)) from e
 
