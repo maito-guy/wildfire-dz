@@ -43,6 +43,13 @@ and a message in the team chat naming who is affected. Everything is WGS84 lat/l
   `api/fwi.py`) before simplifying and flagging, and gains `fwi` (the day's fire weather, or `null` = no cap) and
   `fwi_note`. New `config.yaml` section `risk.fwi`. Additive. Affected: dashboard (Layers card shows the fire weather).
 
+- **v0.9 (#58, C ranks B's flags).** `Village` and `Alert` gain optional `ai_opinion`: `likely | possible | unlikely`,
+  `null` when C has no answer for the fire. `GET /alerts?status=pending` is ordered by `ai_opinion` (likely, possible,
+  unlikely, null), then `minutes_left` (null last); other queries keep creation order. A flag update copies the opinion
+  like `ai_minutes_left`. B still makes every flag; nothing is auto-rejected. New `/events` event `resync` (`data: {}`):
+  the client fell more than `api.events_queue_size` events behind (new `config.yaml` key, was a fixed 100 that dropped
+  flags silently), its missed events were dropped, and it must refetch `GET /alerts`. Additive. Affected: dashboard (#59).
+
 ---
 
 ## 1. Data contract
@@ -164,6 +171,11 @@ Request:
 - `Village.ai_minutes_left` / `Alert.ai_minutes_left` *(optional, v0.6)*: C's arrival at the `possible` level from
   its cell under the village; `null` = C has no cell there or the fire does not reach it within 2 h. Minutes come in
   C's steps (20, 30, 45, 60, 75, 90, 105, 120), so 20 means "within 20 min".
+- `Village.ai_opinion` / `Alert.ai_opinion` *(optional, v0.9)*: C's opinion of the village for this pass, from its cell
+  under the village (within 0.75 cell): `likely` = inside C's likely zone within 2 h (`status.get_ready_max_min`),
+  `possible` = inside the possible zone within 2 h only, `unlikely` = C answered for this pass but the village is
+  outside both (or C has no cell there); `null` = no C answer for this fire (live fires, no `replay_ai.parquet`, a pass
+  C did not cover). Advice only: it orders the approval queue and never creates, drops or changes a flag.
 - 422 if a point is south of 34.5°N.
 
 Response 200:
@@ -330,6 +342,8 @@ Simulated hand-off: when an alert becomes `sent` or `cancelled`, the API logs on
 
 ### `GET /alerts?fire_id=<id>&status=<status>` *(added v0.1, `status` v0.2)*
 → `[Alert, ...]` in creation order. Both filters are optional. `status` is one of `pending | sent | rejected | cancelled`.
+With `status=pending` *(v0.9)* the list is the approval queue order instead: `ai_opinion` `likely`, `possible`,
+`unlikely`, then `null`; within each group `minutes_left` ascending, `null` last; ties in creation order.
 
 ### `GET /alerts/stream?village_id=<id>`: push stream for phones (SSE)
 `text/event-stream`. Only sent alerts and cancels: a pending or rejected flag never appears here. Events:
@@ -357,6 +371,10 @@ data: {Alert object, status "cancelled"}
 | `alert_sent` | approved, or a manual alert sent |
 | `alert_rejected` | rejected |
 | `alert_cancelled` | a sent alert cancelled |
+| `resync` *(v0.9)* | `data: {}`. This client fell more than `api.events_queue_size` events behind: the events it had not read were dropped. Refetch `GET /alerts` (and the views built on it) |
+
+Each client's queue holds `api.events_queue_size` events (`config.yaml`); a drop is logged (logger `api.alerts`).
+`/alerts/stream` uses the same size but never sends `resync`: a phone that far behind only gets a logged drop.
 
 ### `GET /replay` *(added v0.1)*
 ```json
