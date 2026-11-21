@@ -113,7 +113,16 @@ def main():
     print(f"{len(need):,} fires to cover, {len(todo):,} still need terrain and fuel")
     with rasterio.Env(**ENV):
         for n, f in enumerate(todo, 1):
-            np.savez_compressed(C.CACHE_STATIC / f"{f.fire_id}.npz", **static_for_fire(f))
+            for attempt in range(3):                    # remote tile reads fail now and then
+                try:
+                    st = static_for_fire(f)
+                    break
+                except RasterioIOError as e:
+                    print(f"  fire {f.fire_id}: {str(e)[:100]} (attempt {attempt + 1})", flush=True)
+            else:
+                print(f"  skipped fire {f.fire_id}; rerun later", flush=True)
+                continue
+            np.savez_compressed(C.CACHE_STATIC / f"{f.fire_id}.npz", **st)
             if n % 100 == 0:
                 print(f"{n}/{len(todo)}", flush=True)
 

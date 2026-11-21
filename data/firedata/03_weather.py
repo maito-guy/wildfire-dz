@@ -15,7 +15,7 @@ def fetch(lat, lon, start, end):
                   wind_speed_unit="kmh")
     for attempt in range(6):
         try:
-            r = requests.get(C.OPEN_METEO_URL, params=params, timeout=60)
+            r = requests.get(C.OPEN_METEO_URL, params=params, timeout=120)
         except requests.RequestException as e:        # timeouts, dropped connections
             print("  error", e, flush=True); time.sleep(5 * (attempt + 1)); continue
         if r.status_code == 200:
@@ -49,7 +49,11 @@ def main():
         f = fires.loc[fid]
         start = (f.t_first - pd.Timedelta(days=C.WEATHER_LOOKBACK_DAYS)).date()
         end = (f.t_last + pd.Timedelta(days=1)).date()
-        js = fetch(f.lat_c, f.lon_c, start, end)
+        try:
+            js = fetch(f.lat_c, f.lon_c, start, end)
+        except RuntimeError:                            # one bad fire must not stop the run
+            print(f"  skipped fire {fid} after repeated failures; rerun later", flush=True)
+            continue
         (C.CACHE_WEATHER / f"{fid}.json").write_text(json.dumps(js["hourly"]))
         time.sleep(0.12)                               # stays under 600 calls a minute
         if n % 200 == 0:
