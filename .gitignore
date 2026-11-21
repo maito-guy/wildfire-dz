@@ -9,6 +9,8 @@ data/algeria-fire-map-data/
 data/cache/
 data/cache_weather/
 data/cache_static/
+data/cache_static_raster/
+*.npz
 data/raw_firms/
 data/boundaries/
 data/baseline/

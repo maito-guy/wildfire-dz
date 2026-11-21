@@ -69,7 +69,9 @@ def tiles(bounds, step):
             yield la, lo
 
 
-def static_for_fire(f, dem_url=C.DEM_URL, wc_url=C.WORLDCOVER_URL):
+def static_for_fire(f, dem_url=C.DEM_URL, wc_url=C.WORLDCOVER_URL, require_land=True):
+    """require_land=False (the national raster, data/build_static_raster.py): an all-sea grid is
+    valid. Network failures still raise in accumulate()."""
     size = int(f.nx * f.ny)
     b = grid_bounds(f)
     s1, s2, cnt = np.zeros(size), np.zeros(size), np.zeros(size)
@@ -93,7 +95,7 @@ def static_for_fire(f, dem_url=C.DEM_URL, wc_url=C.WORLDCOVER_URL):
 
     for la, lo in tiles(b, 3):
         accumulate(tile_url(wc_url, la, lo), f, b, 3, wc_px)       # read at ~30 m
-    if cnt.sum() == 0 or wcnt.sum() == 0:                          # a fire burns on land
+    if require_land and (cnt.sum() == 0 or wcnt.sum() == 0):       # a fire burns on land
         raise RasterioIOError(f"fire {f.fire_id}: no elevation or land-cover pixels read")
     shape = (int(f.ny), int(f.nx))
     elev2 = elev.reshape(shape)
