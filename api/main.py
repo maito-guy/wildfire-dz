@@ -15,7 +15,7 @@ from fastapi import Body, Depends, FastAPI, Header, HTTPException, Request
 from fastapi.responses import RedirectResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
-from api import ai_layer, cap, detections, impact, predictor, replay, weather
+from api import ai_layer, cap, detections, firms_live, impact, predictor, replay, weather
 from api import scoreboard as scoreboard_file
 from api.alerts import LANGS, Broker, store
 from api.schemas import (
@@ -37,6 +37,15 @@ FIRES: dict[str, dict] = {}          # fire_id -> latest prediction state (in me
 _fire_ids = itertools.count(1)
 log = logging.getLogger(__name__)
 _dev_mode_warned = False
+_background: set[asyncio.Task] = set()
+
+
+@app.on_event("startup")
+async def _start_firms_live() -> None:
+    """Live FIRMS detections every firms_live.interval_min (#61); off without FIRMS_MAP_KEY."""
+    t = asyncio.create_task(firms_live.loop())
+    _background.add(t)
+    t.add_done_callback(_background.discard)
 
 
 def require_operator(x_operator_token: str | None = Header(default=None)) -> None:
@@ -92,7 +101,8 @@ async def health():
             "dashboards_connected": len(store.events.queues), "pending_alerts": store.pending_count(),
             "model_c_exported": bool(predictor.manifest().get("model_c")),
             "places": "real" if impact.real_places() is not None else "stub",
-            "replay": "real" if not replay.list_fires()[0]["stub"] else "stub"}
+            "replay": "real" if not replay.list_fires()[0]["stub"] else "stub",
+            "firms_live": firms_live.public_status()}
 
 
 @app.post("/predict", response_model=PredictResponse)

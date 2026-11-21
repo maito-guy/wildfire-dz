@@ -34,7 +34,7 @@ COPY alert/ alert/
 COPY config.yaml .
 COPY --from=web /src/dashboard/dist /app/dashboard/dist
 
-RUN mkdir -p data/out model/artifacts \
+RUN mkdir -p data/out data/live model/artifacts \
  && useradd --uid 10001 --user-group --no-create-home --home-dir /app --shell /usr/sbin/nologin app \
  && chown -R app:app /app
 USER app

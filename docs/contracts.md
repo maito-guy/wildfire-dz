@@ -34,6 +34,11 @@ and a message in the team chat naming who is affected. Everything is WGS84 lat/l
   `paths.replay_ai` and section `ai_layer:`. Additive: C never creates, changes or sends a flag; B stays the model of
   record. Affected: dashboard (#53 draws it).
 
+- **v0.7 (#61, live fire map).** New file `data/live/firms_live.parquet` (written by `api/firms_live.py` every
+  `firms_live.interval_min` when `FIRMS_MAP_KEY` is set; same columns as `detections.parquet`, `country` empty) and new
+  key `paths.detections_live`, section `firms_live:`. `GET /detections` serves the archive and the live rows together.
+  `GET /health` adds `firms_live: {enabled, reason, last_ok, last_error, added, newest}`. Additive; affected: dashboard (none needed).
+
 ---
 
 ## 1. Data contract
@@ -460,7 +465,9 @@ Fire history grid, all years. No token.
 ### `GET /health` *(added v0.1)*
 ```json
 {"ok": true, "fires": 1, "phones_connected": 4, "dashboards_connected": 1, "pending_alerts": 3,
- "model_c_exported": false, "places": "real", "replay": "real"}
+ "model_c_exported": false, "places": "real", "replay": "real",
+ "firms_live": {"enabled": false, "reason": "FIRMS_MAP_KEY is not set in .env", "last_ok": null, "last_error": null,
+                "added": 0, "newest": null}}
 ```
 `phones_connected` = clients on `/alerts/stream`, `dashboards_connected` = clients on `/events` (v0.2),
 `pending_alerts` = alerts waiting for the operator.

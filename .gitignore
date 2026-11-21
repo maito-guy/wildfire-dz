@@ -4,6 +4,7 @@
 
 # data: never commit
 data/out/
+data/live/
 data/raw/
 data/algeria-fire-map-data/
 data/cache/
