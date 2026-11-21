@@ -1,6 +1,6 @@
 # Wildfire training data: download and clean
 
-Five scripts, run in order, from this folder. Everything lands in `data/` (set `FIREDATA_DIR` to put it elsewhere).
+Seven scripts, run in order, from this folder (6 and 7 only build evaluation and API files). Everything lands in `data/` (set `FIREDATA_DIR` to put it elsewhere).
 Settings (countries, years, months, thresholds) are all in `config.py`.
 
 ```
@@ -11,6 +11,9 @@ python 02_clean.py --export path/to/detections.csv   # ~5-30 min
 python 03_weather.py                  # resumable; max ~9,000 fires a day (free Open-Meteo limit)
 python 04_terrain_fuel.py             # resumable; ~1-3 s per fire
 python 05_build_table.py              # -> data/out/train.parquet
+python 06_places_replay.py --export-dir path/to/export   # -> places + replay_passes (API)
+python 07_holdout_dense.py            # -> holdout_dense (village scoring on the holdouts)
+python 06_places_replay.py --events && python 07_holdout_dense.py --events   # -> crossval.events files
 ```
 
 Get the free FIRMS key first: https://firms.modaps.eosdis.nasa.gov/api/map_key/ (arrives by email in a minute).
@@ -26,6 +29,8 @@ isn't there yet, so you can build a first table early (Algeria is fetched first)
 | 3 | Open-Meteo archive (ERA5), hourly | Per fire: temperature, humidity, VPD, wind speed/direction/gusts, rain, soil moisture, from 10 days before the fire |
 | 4 | Copernicus DEM 90 m, ESA WorldCover 10 m (2021), read remotely | Per fire, on its 375 m grid: elevation, roughness, slope, aspect, and the share of tree, shrub, grass, crop, built, bare, water |
 | 5 | Steps 2-4 | `train.parquet`: one row per cell within 3 km of the fire per pass pair; `label` = burning at the next pass |
+| 6 | Step 2 + the export's `places.csv` | `places.parquet` and `replay_passes.parquet` for the holdouts in the repo's `config.yaml` (`--events`: `crossval.events`) |
+| 7 | Steps 2-5 | Step 5's rows for every cell around the holdout fires (`--events`: `crossval.events`), for village scoring |
 
 ## Things to know before training
 
@@ -33,6 +38,9 @@ isn't there yet, so you can build a first table early (Algeria is fetched first)
   (`JITTER_CELLS = 1`): VIIRS pixels wobble by about a cell between passes, and that wobble looks like spread.
   On the Algeria export this leaves 311 of 9,802 short pairs with 5+ new cells; counting cells right next to
   the fire gives 1,274. Set `JITTER_CELLS = 0` in `config.py` to train on the looser label.
+- **Step 4 needs a steady connection.** A tile the server says does not exist (HTTP 404) is sea; any other failed
+  read is retried and the fire is skipped, never saved as "0 m, all water". Before 2026-11-21 an outage did save
+  4,819 fires that way; check with: every `cache_static/*.npz` has some non-zero `elev` and `fuel_water` below 1.
 - **Negatives are sampled.** Only 30% of non-burning cells are kept; use the `weight` column in training.
 - **No detection does not mean no fire.** Cloud, smoke and the satellite's viewing angle hide fire. Treat label 0 as "not seen".
 - **Weather after the first pass is the real weather**, not a forecast (history has no forecasts). In live use the

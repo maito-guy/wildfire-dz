@@ -38,6 +38,16 @@ class Cell(BaseModel):
     arrival_min: float
 
 
+class AiLayer(BaseModel):
+    """Model C's advice next to B (#52). Never creates flags. Only on replays for now; None elsewhere."""
+    model: str                                 # e.g. "C_dza"
+    label: str                                 # show it with the layer: "AI estimate (model C), check before acting"
+    time: datetime                             # the satellite pass C answered for (within ai_layer.match_min)
+    likely_recall: float | None                # share of burned cells C's "likely" zone catches (0.90)
+    possible_recall: float | None              # same for "possible" (0.99)
+    zones: dict[str, Any]                      # GeoJSON; properties.horizon_min 60 | 120, confidence likely | possible
+
+
 class PredictResponse(BaseModel):
     fire_id: str
     time: datetime
@@ -51,6 +61,7 @@ class PredictResponse(BaseModel):
     embers_applied: bool
     zones: dict[str, Any]                      # GeoJSON FeatureCollection, properties.horizon_min = 60 | 120
     cells: list[Cell]                          # every cell reached within 120 min
+    ai: AiLayer | None = None                  # model C's advice (#52); None = C has no answer for this request
 
 
 class Village(BaseModel):
@@ -60,6 +71,7 @@ class Village(BaseModel):
     lon: float
     distance_km: float                         # to the nearest burning cell
     minutes_left: int | None                   # None = not reached within the model's horizon
+    ai_minutes_left: int | None = None         # model C's possible-level arrival (#52); None = no C answer within 2 h
     status: Status                             # sticky: never back to "safe" while the fire is active
     fire_direction: str                        # compass direction of the fire, seen from the village
     leave_toward: str                          # compass direction to leave toward
@@ -97,6 +109,7 @@ class Alert(BaseModel):
     cancelled_at: datetime | None = None
     edited: bool = False                       # operator changed the texts before approving
     minutes_left: int | None
+    ai_minutes_left: int | None = None         # model C's view when the flag was made or updated (#52), advice only
     distance_km: float
     fire_direction: str
     leave_toward: str

@@ -28,6 +28,12 @@ and a message in the team chat naming who is affected. Everything is WGS84 lat/l
   deterministic stub data (`stub: true`). New `config.yaml` keys `paths.detections`, `paths.history_grid` and section
   `fire_map:`. Affected: Data (writes the files), dashboard (fire map layers).
 
+- **v0.6 (#52, AI layer).** `POST /predict` gains an optional `ai` block: model C's "likely" and "possible" 1 h / 2 h
+  zones, only on replays for now (`null` otherwise). `Village` and `Alert` gain optional `ai_minutes_left`. New file
+  `model/artifacts/replay_ai.parquet` (+ `.json`) written by `model.replay_ai` (`make replay-ai`), new keys
+  `paths.replay_ai` and section `ai_layer:`. Additive: C never creates, changes or sends a flag; B stays the model of
+  record. Affected: dashboard (#53 draws it).
+
 ---
 
 ## 1. Data contract
@@ -96,6 +102,7 @@ aggregates `detections.parquet` itself (`fire_map.history_cell_deg`), and withou
 | `scoreboard.json` | `model.evaluate` | per holdout × model metrics (shape in §2, `GET /scoreboard`) |
 | `api_manifest.json` | `model.export` | what the API loads: rates for A/B and the shipped C (or `null`) |
 | `risk_today.parquet` | `model.risk` | today's risk per cell (above, v0.4) |
+| `replay_ai.parquet` (+ `.json`) | `model.replay_ai` | model C's zones per holdout pass: `holdout, t, lat, lon, likely_min, possible_min` (v0.6) |
 
 ---
 
@@ -133,6 +140,21 @@ Request:
 - `model`: `auto | A | B | C`. `auto` = C when shipped and wired, else B. **Fail-safe:** if C errors → B and `fallback_reason` says why.
 - `wind` omitted → Open-Meteo 10 m wind at the fire centroid: the vector mean of the hour nearest `time` (UTC) and the next `forecast.mean_hours` (2) hours, the same definition as the training features `wind_speed_2h`/`wind_from_2h` (3 s timeout, cached 15 min): `time` within `now - forecast.past_days` … `now + 7 days` → forecast API (`wind_source: "forecast"`); older → archive API, ERA5 (`"reanalysis"`); any error, timeout or missing value → `config.yaml → weather_default` (`"config_default"`). A request `wind` always wins (`"request"`).
 - `wind_source`: `request | forecast | reanalysis | config_default`.
+- `ai` *(optional, v0.6, #52)*: model C's advice next to B, or `null` (live fires; no `replay_ai.parquet`; no
+  precomputed pass within `ai_layer.match_min` of `time`). It never creates or changes a flag.
+  ```json
+  "ai": {"model": "C_dza", "label": "AI estimate (model C), check before acting", "time": "2021-08-10T12:49:00Z",
+         "likely_recall": 0.9, "possible_recall": 0.99,
+         "zones": {"type": "FeatureCollection", "features": [
+           {"type": "Feature", "properties": {"horizon_min": 60, "confidence": "likely"}, "geometry": {"...": "..."}}]}}
+  ```
+  `confidence: likely` = the zone that caught 90 % of burned cells on C's validation fires, `possible` = 99 %
+  (Kabylie 2021, 1 h: likely flags 15 % of the cells around the fire and catches 93 % of burns; possible 46 % / 98 %;
+  B 64 % / 98 %). `time` is the satellite pass C answered for. C used that pass's real (ERA5) wind, not the request's.
+  C only sees cells within 6 km of the fire (data step 7).
+- `Village.ai_minutes_left` / `Alert.ai_minutes_left` *(optional, v0.6)*: C's arrival at the `possible` level from
+  its cell under the village; `null` = C has no cell there or the fire does not reach it within 2 h. Minutes come in
+  C's steps (20, 30, 45, 60, 75, 90, 105, 120), so 20 means "within 20 min".
 - 422 if a point is south of 34.5°N.
 
 Response 200:
@@ -379,6 +401,10 @@ with `"stub": true`, `"status": "not measured yet"`, one entry per `config.yaml 
   `village`, `lead_min`, `old_method_lead_min` is `null`, the dashboard shows "not measured".
 - Model keys are free-form (`A`, `B`, `C_<tag>`); the dashboard shows whichever are present. Extra keys
   (`n_rows`, `n_burned_cells`) are ignored.
+- `ship_c.decision` is always one string (`"ship C_<tag>"`, `"keep B"` or `"not measured yet"`). The reason per C
+  model is in the optional `ship_c.decision_by_model` (`{"C_dza": "keep B: kabylie_2021: misses 4 villages, B misses 1"}`).
+  `model.evaluate` also writes extra per-holdout sections (`matched_recall`, `villages_where_c_has_cells`,
+  `wind_robustness`); the dashboard ignores them.
 
 ### `GET /risk` *(added v0.4, #28)*
 Today's risk layer, simplified for the map, and the very-high-risk places. No token.

@@ -6,6 +6,12 @@
 data/out/
 data/raw/
 data/cache/
+data/cache_weather/
+data/cache_static/
+data/raw_firms/
+data/boundaries/
+data/baseline/
+data/*.log
 *.parquet
 *.csv
 *.tif
@@ -40,3 +46,7 @@ dashboard/dist/
 # npm workspaces + Turborepo (root)
 /node_modules/
 .turbo/
+
+# local runs and quarantined downloads
+data/runs/
+data/cache_static_bad/

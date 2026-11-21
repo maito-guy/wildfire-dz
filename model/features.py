@@ -27,12 +27,13 @@ def check_columns(df: pd.DataFrame, cfg: dict) -> None:
         )
 
 
-def holdout_fire_ids(df: pd.DataFrame, cfg: dict) -> dict[str, set]:
-    """A fire is held out if any of its rows falls inside a holdout's time window and bbox."""
+def holdout_fire_ids(df: pd.DataFrame, cfg: dict, events: dict | None = None) -> dict[str, set]:
+    """A fire belongs to an event if any of its rows falls inside the event's time window and bbox.
+    events: {key: {start, end, bbox}}; default config.yaml -> holdouts (crossval.py passes crossval.events)."""
     c = cfg["columns"]
     t = pd.to_datetime(df[c["t1"]], utc=True)
     out: dict[str, set] = {}
-    for key, h in cfg["holdouts"].items():
+    for key, h in (cfg["holdouts"] if events is None else events).items():
         lon_min, lat_min, lon_max, lat_max = h["bbox"]
         start = pd.Timestamp(h["start"], tz="UTC")
         end = pd.Timestamp(h["end"], tz="UTC") + pd.Timedelta(days=1)
@@ -63,12 +64,29 @@ def split(df: pd.DataFrame, cfg: dict, countries: list[str] | None = None):
     return train, val, holdouts
 
 
+# Built from other columns in to_matrix, never read from the table. They put the physics of
+# baselines A and B in front of the trees: "how fast would the fire have to run to get here?"
+DERIVED = ("rate_a", "rate_b", "rate_burned", "wind_along", "is_short")
+
+
 def feature_columns(df: pd.DataFrame, cfg: dict) -> list[str]:
-    drop = set(cfg["columns"]["id_like"]) | {cfg["columns"]["kind"]}
+    drop = set(cfg["columns"]["id_like"]) | {cfg["columns"]["kind"]} | set(DERIVED)
+    drop |= set(cfg["model"].get("drop_features", []))
     return [col for col in df.columns if col not in drop and pd.api.types.is_numeric_dtype(df[col])]
 
 
 def to_matrix(df: pd.DataFrame, cols: list[str], cfg: dict) -> pd.DataFrame:
-    X = df[cols].copy()
-    X["is_short"] = (df[cfg["columns"]["kind"]] == cfg["model"]["kind_for_1h"]).astype(int)
+    """cols = raw table columns. Adds the derived features, so changing gap_min updates them."""
+    from model import baselines
+
+    c = cfg["columns"]
+    X = df[[col for col in cols if col not in DERIVED]].copy()
+    gap = np.maximum(df[c["gap_min"]].to_numpy(dtype=float), 1.0)
+    X["rate_a"] = df[c["dist_active"]].to_numpy(dtype=float) / gap
+    X["rate_b"] = baselines.required_rate(df, "B", cfg)
+    if "dist_burned_m" in df:
+        X["rate_burned"] = df["dist_burned_m"].to_numpy(dtype=float) / gap
+    wind = df["wind_speed_2h"] if "wind_speed_2h" in df else df[c["wind_kmh"]]
+    X["wind_along"] = df[c["downwind_cos"]].to_numpy(dtype=float) * wind.to_numpy(dtype=float)
+    X["is_short"] = (df[c["kind"]] == cfg["model"]["kind_for_1h"]).astype(int)
     return X

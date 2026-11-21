@@ -7,7 +7,7 @@ Output: data/cache_static/<fire_id>.npz with elev, elev_std, slope, aspect and o
 grid per fuel class (tree, shrub, grass, crop, built, bare, water).
 """
 import math
-import numpy as np, pandas as pd, rasterio
+import numpy as np, pandas as pd, rasterio, requests
 from rasterio.windows import from_bounds
 from rasterio.errors import RasterioIOError
 import config as C
@@ -33,7 +33,15 @@ def accumulate(url, f, bounds, decim, on_pixels):
     try:
         src = rasterio.open(url)
     except RasterioIOError:
-        return False                       # no tile (sea) or not reachable
+        # Only a tile the server says does not exist is sea. A network failure must not be
+        # saved as "0 m, all water": raise so the fire is retried (or skipped, then rerun).
+        try:
+            code = requests.head(url, timeout=30).status_code
+        except requests.RequestException as e:
+            raise RasterioIOError(f"not reachable: {url} ({e})") from e
+        if code == 404:
+            return False                   # no tile here: sea
+        raise RasterioIOError(f"HTTP {code} for {url}")
     with src:
         tb = src.bounds
         ww, ss, ee, nn = max(w, tb.left), max(s, tb.bottom), min(e, tb.right), min(n, tb.top)
@@ -85,6 +93,8 @@ def static_for_fire(f, dem_url=C.DEM_URL, wc_url=C.WORLDCOVER_URL):
 
     for la, lo in tiles(b, 3):
         accumulate(tile_url(wc_url, la, lo), f, b, 3, wc_px)       # read at ~30 m
+    if cnt.sum() == 0 or wcnt.sum() == 0:                          # a fire burns on land
+        raise RasterioIOError(f"fire {f.fire_id}: no elevation or land-cover pixels read")
     shape = (int(f.ny), int(f.nx))
     elev2 = elev.reshape(shape)
     dzdy, dzdx = np.gradient(elev2, C.CELL_M)                       # rows go south -> north
@@ -99,18 +109,32 @@ def static_for_fire(f, dem_url=C.DEM_URL, wc_url=C.WORLDCOVER_URL):
 
 
 def main():
+    import argparse
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--shard", default="0/1", help="i/n: this process does every n-th fire (run n at once)")
+    a = ap.parse_args()
+    i, n_sh = map(int, a.shard.split("/"))
     fires = pd.read_parquet(C.OUT / "fires.parquet")
     pairs = pd.read_parquet(C.OUT / "pairs.parquet")
-    grew = pairs.groupby("fire_id").n_new.sum()
-    need = fires[fires.fire_id.isin(grew[grew > 0].index)]      # same fires as step 3
-    need = need.assign(dza=need.country == "DZA").sort_values("dza", ascending=False)
+    order = C.growing_fires(fires.set_index("fire_id"), pairs)  # same fires as step 3
+    need = fires.set_index("fire_id").loc[order.index].reset_index()
+    need = need.iloc[i::n_sh]
     todo = [r for r in need.itertuples() if not (C.CACHE_STATIC / f"{r.fire_id}.npz").exists()]
     print(f"{len(need):,} fires to cover, {len(todo):,} still need terrain and fuel")
     with rasterio.Env(**ENV):
         for n, f in enumerate(todo, 1):
-            np.savez_compressed(C.CACHE_STATIC / f"{f.fire_id}.npz", **static_for_fire(f))
+            for attempt in range(3):                    # remote tile reads fail now and then
+                try:
+                    st = static_for_fire(f)
+                    break
+                except RasterioIOError as e:
+                    print(f"  fire {f.fire_id}: {str(e)[:100]} (attempt {attempt + 1})", flush=True)
+            else:
+                print(f"  skipped fire {f.fire_id}; rerun later", flush=True)
+                continue
+            np.savez_compressed(C.CACHE_STATIC / f"{f.fire_id}.npz", **st)
             if n % 100 == 0:
-                print(f"{n}/{len(todo)}")
+                print(f"{n}/{len(todo)}", flush=True)
 
 
 if __name__ == "__main__":

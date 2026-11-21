@@ -8,6 +8,11 @@ paths:
   replay_passes: data/out/replay_passes.parquet  # held-out fire passes (see docs/contracts.md); falls back to a synthetic fire
   detections: data/out/detections.parquet  # VIIRS detections for the fire map (#29); falls back to stub detections
   history_grid: data/out/history_grid.parquet  # pre-aggregated fire history (#29); else built from detections, else stub
+  holdout_dense: data/out/holdout_dense.parquet  # every cell around the holdout fires (data step 7), to score C on villages
+  events_replay: data/out/events_replay.parquet  # same, for crossval.events (step 6 --events); only crossval.py reads them
+  events_dense: data/out/events_dense.parquet    # (step 7 --events)
+  crossval_pooled: data/runs/crossval_pooled.parquet  # every cross-validation test prediction (model/crossval.py)
+  replay_ai: model/artifacts/replay_ai.parquet  # model C's advice on the replays (model/replay_ai.py, #52); none -> ai: null
   artifacts: model/artifacts               # model_c.txt, thresholds.json, scoreboard.json, features.json
   alert_texts: alert/texts.json
   risk_today: model/artifacts/risk_today.parquet  # daily risk cells from model.risk (#27, docs/contracts.md); stub cells if missing
@@ -30,12 +35,23 @@ status:                                    # minutes left -> status (kept on pur
 data_age:
   stale_banner_min: 180                    # banner if newest satellite data is older than 3 h
 
+wind_uncertainty:                          # model/wind.py: C is run once per wind scenario around the forecast
+  dir_offsets_deg: [-40, -20, 0, 20, 40]   # forecast wind direction +/- these (15 scenarios with the speeds)
+  speed_factors: [0.7, 1.0, 1.3]
+  likely_share: 0.5                        # "likely" zone = cell inside the zone in >= half the scenarios
+  blend_wind_weight: 0.5                   # blend = this x C(with wind) + rest x C(no wind)
+  forecast_error:                          # used only to TEST on holdouts: how wrong a 1-2 h forecast is
+    dir_sd_deg: 30                         # PLACEHOLDER typical 10 m wind direction error, check vs real forecasts
+    speed_log_sd: 0.3                      # PLACEHOLDER about +/- 30 % speed error
+    seeds: [0, 1, 2]                       # average the test over a few random forecasts
+
 embers:
   wind_kmh: 40                             # above this, widen the zone downwind by extra rings
   extra_rings: 1
 
 safety:
   target_recall: 0.95                      # >= 95 % of really-burned cells inside the predicted zone
+  time_target_recall: 0.99                 # C minutes-to-arrival: no later than the real arrival for 99 % of burned cells (training fires)
 
 weather_default:                           # used when a request carries no wind and no forecast is wired yet
   speed_kmh: 20                            # PLACEHOLDER
@@ -53,6 +69,59 @@ holdouts:                                  # whole fires, never random rows. Bbo
     end: "2026-09-08"
     bbox: [5.4, 36.0, 8.0, 37.0]           # TO CONFIRM
 
+ai_layer:                                  # model C as advice next to B (#52): zones + arrival times, never alerts
+  model_tag: dza                           # C trained on Algeria only, without the holdout fires
+  likely_recall: 0.90                      # "likely" zone catches 90 % of burns (Kabylie 1 h: flags 15 % of cells)
+  possible_recall: 0.99                    # "possible" zone catches 99 % (Kabylie 1 h: 46 % of cells; B 64 %)
+  match_min: 45                            # a /predict time this close to a precomputed pass uses its answer
+  label: "AI estimate (model C), check before acting"
+
+crossval:                                  # model/crossval.py: every Algerian year is the test set once
+  countries: [DZA]                         # fires that are tested (and C is trained on)
+  n_seeds: 1                               # 1 booster per fold (speed); the shipped C averages model.n_seeds
+  time_recalls: [0.99, 0.995, 0.998, 0.999, 0.9995]  # C's caution on villages: each = "C is late on at most
+                                           # 1 - x of burned cells" on VALIDATION fires (never the test events)
+  regions:                                 # longitude bands, for "does it work in the west too?"
+    west: [-9.0, 2.0]
+    centre: [2.0, 5.5]
+    east: [5.5, 9.0]
+  events:                                  # big fires reported by name. Same format as holdouts. Bboxes are
+    jijel_guelma_2026:                     # ~0.5 deg around the biggest fires in data/out/fires.parquet: TO CONFIRM
+      name: "Jijel / Guelma, Aug 2026"
+      start: "2026-08-22"
+      end: "2026-09-08"
+      bbox: [5.4, 36.0, 8.0, 37.0]
+    kabylie_2021:
+      name: "Kabylie, Aug 2021"
+      start: "2021-08-05"
+      end: "2021-08-16"
+      bbox: [3.5, 36.2, 5.3, 37.0]
+    el_tarf_2026:
+      name: "El Tarf / Souk Ahras, Jul 2026"
+      start: "2026-07-14"
+      end: "2026-07-26"
+      bbox: [6.8, 36.2, 8.7, 37.2]
+    batna_2012:
+      name: "Batna / Khenchela (Aures), Aug 2012"
+      start: "2012-08-01"
+      end: "2012-08-22"
+      bbox: [6.2, 34.7, 7.3, 35.6]
+    bejaia_bouira_2023:
+      name: "Bejaia / Bouira, Jul 2023"
+      start: "2023-07-20"
+      end: "2023-07-28"
+      bbox: [3.0, 36.1, 5.3, 37.0]
+    tlemcen_2026:
+      name: "Tlemcen, Jul 2026"
+      start: "2026-07-13"
+      end: "2026-07-26"
+      bbox: [-2.0, 34.3, -0.6, 35.2]
+    aures_2021:
+      name: "Batna (Aures), Jul 2021"
+      start: "2021-07-03"
+      end: "2021-07-12"
+      bbox: [6.3, 35.0, 7.4, 35.7]
+
 columns:                                   # names in train.parquet; check with `make check-columns`
   label: label
   weight: weight
@@ -67,28 +136,35 @@ columns:                                   # names in train.parquet; check with 
   uphill_grade: uphill_grade
   gap_min: gap_min
   wind_kmh: wind_speed_10m                 # TO CONFIRM against 05_build_table.py output
-  id_like: [fire_id, country, t1, ix, iy, lat, lon, label, weight]
+  id_like: [fire_id, country, t1, ix, iy, lat, lon, label, weight, hop, bearing_deg]   # hop: bookkeeping; bearing: only to redo downwind_cos
 
 model:
   kind_for_1h: short                       # pairs 20-120 min apart train the 1 h model
+  baseline_countries: null                 # B/A spread rate tuned on these countries' fires (null = all in the
+                                           # table). Keep null: crossval 2026-11-21, [DZA] caught only 93.7 % of
+                                           # burned cells (79 % in 2023, 85 % in 2026) vs 97.7 % for all countries.
   baseline_a:
     rate_m_per_min: 15.0                   # PLACEHOLDER; evaluate.py tunes it to hit target_recall
   baseline_b:
     rate_m_per_min: 10.0                   # PLACEHOLDER; tuned the same way
     wind_coef: 0.05                        # spread x exp(wind_coef * wind_kmh * downwind_cos)  (starting value, not fitted)
     slope_coef: 3.5                        # spread x exp(slope_coef * uphill_grade)            (starting value, not fitted)
-  lgbm:
-    num_boost_round: 600
-    early_stopping_rounds: 50
+  lgbm:                                    # regularised: small holdouts reward steadier trees
+    num_boost_round: 3000
+    early_stopping_rounds: 100
     params:
       objective: binary
-      learning_rate: 0.05
-      num_leaves: 31
-      min_data_in_leaf: 50
-      feature_fraction: 0.8
+      learning_rate: 0.03
+      num_leaves: 15
+      min_data_in_leaf: 300
+      lambda_l2: 10.0
+      feature_fraction: 0.7
       bagging_fraction: 0.8
       bagging_freq: 1
       verbose: -1
+  drop_features: [wind_dir_now, wind_from_2h]  # raw degrees (359 and 1 look far apart) acted as a fire id;
+                                           # direction reaches the model through downwind_cos / wind_along
+  n_seeds: 3                               # C = mean of this many boosters (steadier zones)
   val_fraction: 0.2                        # share of training fires held for threshold tuning
   seed: 42
 

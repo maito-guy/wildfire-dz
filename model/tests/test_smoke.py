@@ -40,6 +40,8 @@ def make_cfg(tmp_path):
     synthetic_table().to_parquet(table)
     cfg["paths"]["train_table"] = str(table)
     cfg["paths"]["artifacts"] = str(tmp_path / "artifacts")
+    for k in ("replay_passes", "places", "holdout_dense"):   # never read the real data/out files
+        cfg["paths"][k] = str(tmp_path / f"missing_{k}.parquet")
     cfg["model"]["lgbm"]["num_boost_round"] = 30
     return cfg
 
@@ -53,6 +55,9 @@ def test_train_evaluate_export(tmp_path):
     models = board["fires"][0]["models"]
     assert {"A", "B", "C_mixed", "C_dza"} <= set(models)
     assert models["A"]["missed_villages"] is None  # not measured yet, never invented
+    # contract: the dashboard prints ship_c.decision as text, so it is a string; detail per model beside it
+    assert isinstance(board["ship_c"]["decision"], str)
+    assert set(board["ship_c"]["decision_by_model"]) == {"C_mixed", "C_dza"}
     m = export(cfg, "mixed")
     assert m["model_c"]["tag"] == "mixed"
     assert json.loads((tmp_path / "artifacts" / "api_manifest.json").read_text())["rate_m_per_min"]["B"] > 0

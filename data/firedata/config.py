@@ -19,6 +19,11 @@ YEARS = range(2012, 2027)        # VIIRS S-NPP starts Jan 2012
 MONTHS = (6, 7, 8, 9, 10)        # fire season only; widen if you want more data
 SOURCE_PREFIXES = ("VIIRS_SNPP", "VIIRS_NOAA20", "VIIRS_NOAA21")  # 375 m sensors only
 
+# Borders used to download by box and to label each detection with its real country
+BOUNDARIES_URL = ("https://raw.githubusercontent.com/nvkelso/natural-earth-vector/v5.1.2/"
+                  "geojson/ne_10m_admin_0_countries.geojson")
+COAST_TOL_DEG = 0.03   # ~3 km: coastal detections just outside the simplified coastline
+
 # Only northern Algeria (Sahara detections are mostly industrial). Other countries: no cut.
 DZA_MIN_LAT = 34.5
 
@@ -41,8 +46,12 @@ LONG_PAIR = (120, 16 * 60) # teaches longer runs
 JITTER_CELLS = 1
 
 # Training rows: candidate cells within this many cells (x 375 m) of the current fire
-CANDIDATE_RADIUS_CELLS = 8   # 3 km
+CANDIDATE_RADIUS_CELLS = 16  # 6 km: as far as the dashboard asks the model (step 7 grid edge)
+NEAR_CELLS = 8               # 3 km: inside this, negatives are kept at NEG_KEEP, beyond at NEG_KEEP_FAR
 NEG_KEEP = 0.3               # keep this share of negative cells (weight column corrects for it)
+NEG_KEEP_FAR = 0.08          # far cells rarely burn; keep fewer so the table stays small
+MAX_HOPS = 4                 # also pair pass k with k+2 .. k+MAX_HOPS (gap <= LONG_PAIR[1]):
+                             # teaches "burning within g minutes" for many g, i.e. arrival time
 GRID_MARGIN_CELLS = 16       # margin around each fire's bounding box for terrain/fuel grids
 
 # Remote rasters (public, no key)
@@ -59,3 +68,20 @@ WEATHER_VARS = ["temperature_2m", "relative_humidity_2m", "vapour_pressure_defic
                 "wind_speed_10m", "wind_direction_10m", "wind_gusts_10m",
                 "precipitation", "soil_moisture_0_to_7cm"]
 WEATHER_LOOKBACK_DAYS = 10   # to compute "hours since rain"
+
+# Keep only the N fires that grew most in these countries (steps 3 and 4). Turkey has ~15,000
+# growing fires, mostly small farm burns; uncapped it would be 64 % of the table and of the calls.
+COUNTRY_CAP = {"TUR": 1500}
+
+
+def growing_fires(fires, pairs):
+    """Fire ids that grew (step 3 and 4 cover the same set), Algeria first, then by growth,
+    with COUNTRY_CAP applied. fires: indexed by fire_id."""
+    import pandas as pd
+    g = pairs.groupby("fire_id").n_new.sum()
+    g = g[g > 0]
+    d = pd.DataFrame({"g": g, "country": fires.country.reindex(g.index)})
+    d = d.sort_values("g", ascending=False)
+    d = d[d.groupby("country").cumcount() < d.country.map(COUNTRY_CAP).fillna(len(d))]
+    d["dza"] = d.country == "DZA"
+    return d.sort_values(["dza", "g"], ascending=[False, False])

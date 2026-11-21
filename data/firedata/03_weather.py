@@ -14,7 +14,10 @@ def fetch(lat, lon, start, end):
                   end_date=str(end), hourly=",".join(C.WEATHER_VARS), timezone="UTC",
                   wind_speed_unit="kmh")
     for attempt in range(6):
-        r = requests.get(C.OPEN_METEO_URL, params=params, timeout=60)
+        try:
+            r = requests.get(C.OPEN_METEO_URL, params=params, timeout=120)
+        except requests.RequestException as e:        # timeouts, dropped connections
+            print("  error", e, flush=True); time.sleep(5 * (attempt + 1)); continue
         if r.status_code == 200:
             return r.json()
         if r.status_code == 429:                       # rate limited
@@ -29,27 +32,34 @@ def fetch(lat, lon, start, end):
 
 def main():
     ap = argparse.ArgumentParser(); ap.add_argument("--max", type=int, default=9000)
+    ap.add_argument("--shard", default="0/1", help="i/n: this laptop does every n-th fire (split with friends)")
     ap.add_argument("--all", action="store_true", help="also fires that never grew (more calls)")
     a = ap.parse_args()
     fires = pd.read_parquet(C.OUT / "fires.parquet").set_index("fire_id")
     pairs = pd.read_parquet(C.OUT / "pairs.parquet")
-    useful = pairs.groupby("fire_id").n_new.sum()
-    if not a.all:
-        useful = useful[useful > 0]          # fires that never grew teach little
-    # Algeria first, then the fires that grew most
-    order = pd.DataFrame({"g": useful, "dza": fires.country.reindex(useful.index) == "DZA"})
-    order = order.sort_values(["dza", "g"], ascending=[False, False])
-    todo = [f for f in order.index if not (C.CACHE_WEATHER / f"{f}.json").exists()]
+    if a.all:
+        useful = pairs.groupby("fire_id").n_new.sum()
+        order = pd.DataFrame({"g": useful, "dza": fires.country.reindex(useful.index) == "DZA"})
+        order = order.sort_values(["dza", "g"], ascending=[False, False])
+    else:
+        order = C.growing_fires(fires, pairs)   # grew, Algeria first, COUNTRY_CAP applied
+        useful = order.g
+    i, n_sh = map(int, a.shard.split("/"))
+    todo = [f for f in order.index[i::n_sh] if not (C.CACHE_WEATHER / f"{f}.json").exists()]
     print(f"{len(useful):,} fires to cover, {len(todo):,} still need weather")
     for n, fid in enumerate(todo[: a.max], 1):
         f = fires.loc[fid]
         start = (f.t_first - pd.Timedelta(days=C.WEATHER_LOOKBACK_DAYS)).date()
         end = (f.t_last + pd.Timedelta(days=1)).date()
-        js = fetch(f.lat_c, f.lon_c, start, end)
+        try:
+            js = fetch(f.lat_c, f.lon_c, start, end)
+        except RuntimeError:                            # one bad fire must not stop the run
+            print(f"  skipped fire {fid} after repeated failures; rerun later", flush=True)
+            continue
         (C.CACHE_WEATHER / f"{fid}.json").write_text(json.dumps(js["hourly"]))
         time.sleep(0.12)                               # stays under 600 calls a minute
         if n % 200 == 0:
-            print(f"{n}/{min(len(todo), a.max)}")
+            print(f"{n}/{min(len(todo), a.max)}", flush=True)
 
 
 if __name__ == "__main__":

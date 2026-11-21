@@ -1,12 +1,15 @@
 """Step 5: one training row per candidate cell per pass pair -> data/out/train.parquet
 
 Label  : 1 if the cell is burning at the next pass (and was not already burning or next to it).
-Rows   : every cell within CANDIDATE_RADIUS_CELLS (3 km) of the fire, all positives, and a
-         NEG_KEEP share of negatives (column `weight` = 1/NEG_KEEP undoes the sampling).
+Rows   : every cell within CANDIDATE_RADIUS_CELLS (6 km) of the fire, all positives, and a share of
+         negatives: NEG_KEEP within NEAR_CELLS, NEG_KEEP_FAR beyond (`weight` = 1/share undoes it).
+Pairs  : each pass k with the next pass (hop 1) and with passes k+2 .. k+MAX_HOPS while the gap is
+         <= 16 h. Label = burning at ANY of those later passes, so the row answers "burning within
+         gap_min minutes?", which is what the dashboard asks for every horizon.
 Weather: values at the first pass, the actual values 1 h and 2 h later (a perfect forecast,
          since history has no forecasts), and hours since the last rain.
 Pairs with no weather or terrain file yet are skipped, so you can rerun after steps 3-4 finish.
-    python 05_build_table.py [--kind short|long|both]
+    python 05_build_table.py [--kind short|long|both] [--max-hops 4] [--out out/train.parquet]
 """
 import argparse, json
 import numpy as np, pandas as pd
@@ -51,7 +54,29 @@ def weather_at(w, t):
     return out
 
 
-def rows_for_pair(pr, f, cells, st, wx, rng):
+def add_hops(pairs, passes, max_hops):
+    """Consecutive pairs (hop 1) plus pass k -> k+j for j = 2..max_hops while the gap is <= 16 h."""
+    pairs = pairs.assign(hop=1)
+    if max_hops <= 1:
+        return pairs
+    ps = passes.set_index(["fire_id", "pass_idx"])
+    extra = []
+    for j in range(2, max_hops + 1):
+        key = pd.MultiIndex.from_arrays([pairs.fire_id, pairs.pass_idx + j])
+        ok = key.isin(ps.index)
+        e = pairs[ok].copy()
+        later = ps.loc[key[ok]]
+        e["t2"] = pd.to_datetime(later.t.values, utc=True)
+        e["gap_min"] = (e.t2 - pd.to_datetime(e.t1, utc=True)).dt.total_seconds() / 60
+        e["sat2"] = later.sat.values
+        e["hop"] = j
+        e = e[e.gap_min <= C.LONG_PAIR[1]]
+        e["kind"] = np.where(e.gap_min <= C.SHORT_PAIR[1], "short", "long")
+        extra.append(e)
+    return pd.concat([pairs, *extra], ignore_index=True)
+
+
+def rows_for_pair(pr, f, cells, st, wx, rng, hop=1):
     shape = (int(f.ny), int(f.nx))
     burned = np.zeros(shape, bool)
     for k, c in cells.items():
@@ -62,14 +87,18 @@ def rows_for_pair(pr, f, cells, st, wx, rng):
     frp_now = np.zeros(shape); frp_now[cur.iy.values, cur.ix.values] = cur.frp.values
     struct = np.ones((2 * C.JITTER_CELLS + 1,) * 2, bool)
     near = ndimage.binary_dilation(burned, struct) if C.JITTER_CELLS else burned
-    nxt = cells[pr.pass_idx + 1]
-    label = np.zeros(shape, bool); label[nxt.iy.values, nxt.ix.values] = True
+    label = np.zeros(shape, bool)
+    for k in range(pr.pass_idx + 1, pr.pass_idx + hop + 1):
+        nxt = cells[k]
+        label[nxt.iy.values, nxt.ix.values] = True
     label &= ~near
     d_burn = ndimage.distance_transform_edt(~burned)
     d_act, (ay, ax) = ndimage.distance_transform_edt(~active, return_indices=True)
     cand = (d_burn <= C.CANDIDATE_RADIUS_CELLS) & ~near
     pos = cand & label
-    keep = pos | (cand & ~label & (rng.random(shape) < C.NEG_KEEP))
+    share = np.where(d_burn <= getattr(C, "NEAR_CELLS", C.CANDIDATE_RADIUS_CELLS), C.NEG_KEEP,
+                     getattr(C, "NEG_KEEP_FAR", C.NEG_KEEP))
+    keep = pos | (cand & ~label & (rng.random(shape) < share))
     iy, ix = np.nonzero(keep)
     if len(iy) == 0:
         return None
@@ -87,10 +116,12 @@ def rows_for_pair(pr, f, cells, st, wx, rng):
         "lat": f.lat0 + (iy + 0.5) * C.CELL_M / C.M_PER_DEG_LAT,
         "lon": f.lon0 + (ix + 0.5) * C.CELL_M / f.mlon,
         "label": label[iy, ix].astype(np.int8),
-        "weight": np.where(label[iy, ix], 1.0, 1.0 / C.NEG_KEEP).astype(np.float32),
+        "hop": hop,
+        "weight": np.where(label[iy, ix], 1.0, 1.0 / share[iy, ix]).astype(np.float32),
         # fire geometry
         "dist_burned_m": d_burn[iy, ix] * C.CELL_M, "dist_active_m": d_act[iy, ix] * C.CELL_M,
         "downwind_cos": np.cos(np.radians(bearing - wind_to)),
+        "bearing_deg": bearing,        # fire -> cell direction, so downwind_cos can be redone for another wind
         "uphill_grade": np.where(dist_m > 0, rise / np.maximum(dist_m, 1), 0.0),
         "n_active": pr.n_active, "n_burned": pr.n_burned, "frp_active_sum": cur.frp.sum(),
         "frp_nearest": frp_now[ay[iy, ix], ax[iy, ix]],
@@ -109,9 +140,12 @@ def rows_for_pair(pr, f, cells, st, wx, rng):
 
 def main():
     ap = argparse.ArgumentParser(); ap.add_argument("--kind", default="both")
+    ap.add_argument("--max-hops", type=int, default=getattr(C, "MAX_HOPS", 1))
+    ap.add_argument("--out", default=None, help="default: out/train.parquet")
     a = ap.parse_args()
     fires = pd.read_parquet(C.OUT / "fires.parquet").set_index("fire_id")
-    pairs = pd.read_parquet(C.OUT / "pairs.parquet")
+    pairs = add_hops(pd.read_parquet(C.OUT / "pairs.parquet"),
+                     pd.read_parquet(C.OUT / "passes.parquet"), a.max_hops)
     if a.kind != "both":
         pairs = pairs[pairs.kind == a.kind]
     cells_all = pd.read_parquet(C.OUT / "pass_cells.parquet")
@@ -130,15 +164,17 @@ def main():
             wx = weather_at(w, pr.t1)
             if wx is None:
                 skipped["weather_gap"] += 1; continue
-            df = rows_for_pair(pr, f, cells_by_fire[fid], st, wx, rng)
+            df = rows_for_pair(pr, f, cells_by_fire[fid], st, wx, rng, pr.hop)
             if df is not None:
                 out.append(df)
     if not out:
         raise SystemExit(f"no rows built; skipped: {skipped}. Run steps 3 and 4 first.")
     t = pd.concat(out, ignore_index=True)
-    t.to_parquet(C.OUT / "train.parquet")
+    f64 = t.select_dtypes("float64").columns
+    t[f64] = t[f64].astype(np.float32)                 # halves the size; 7 digits is plenty
+    t.to_parquet(a.out or C.OUT / "train.parquet")
     print(f"{len(t):,} rows, {int(t.label.sum()):,} positive, from {t.fire_id.nunique():,} fires; skipped pairs: {skipped}")
-    print(t.groupby(["country", "kind"]).label.agg(["size", "sum"]))
+    print(t.groupby(["country", "kind", "hop"]).label.agg(["size", "sum"]))
 
 
 if __name__ == "__main__":

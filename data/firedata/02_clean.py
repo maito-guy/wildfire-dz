@@ -13,6 +13,7 @@ from pathlib import Path
 import numpy as np, pandas as pd
 from scipy import ndimage
 import config as C
+import boundaries
 
 SAT_FROM_SOURCE = {"VIIRS_SNPP": "SNPP", "VIIRS_NOAA20": "NOAA20", "VIIRS_NOAA21": "NOAA21"}
 
@@ -43,8 +44,13 @@ def load_export(path):
     d = pd.read_csv(path, usecols=["lng", "lat", "frp", "confidence", "acq_datetime",
                                    "instrument", "source", "daynight"])
     d = d[d.instrument == "VIIRS"]
+    t = pd.to_datetime(d.acq_datetime, utc=True, format="ISO8601")
+    # same season and years as the API download, so Algeria isn't the only country with
+    # winter/spring (mostly farm) burning in the table
+    keep = t.dt.month.isin(C.MONTHS) & t.dt.year.isin(C.YEARS)
+    d, t = d[keep], t[keep]
     return pd.DataFrame({
-        "lat": d.lat, "lon": d.lng, "t": pd.to_datetime(d.acq_datetime, utc=True),
+        "lat": d.lat, "lon": d.lng, "t": t,
         "sat": d.source.str.extract(r"^(VIIRS_[A-Z0-9]+?)_(?:SP|NRT)$")[0].map(SAT_FROM_SOURCE),
         "frp": d.frp, "conf": d.confidence.astype(str).str[0].str.lower(),
         "daynight": d.daynight, "country": "DZA"})
@@ -161,7 +167,12 @@ def main():
     if a.export:
         parts.append(load_export(a.export))
     d = pd.concat([p for p in parts if len(p)], ignore_index=True)
-    print(f"loaded {len(d):,} VIIRS detections")
+    print(f"loaded {len(d):,} VIIRS detections", flush=True)
+    # download boxes overlap and include neighbours: label by the border each point is inside
+    d["country"] = boundaries.label(d.lat.values, d.lon.values)
+    print(f"outside {'/'.join(C.COUNTRIES)} (neighbours, open sea), dropped: "
+          f"{d.country.isna().sum():,}", flush=True)
+    d = d[d.country.notna()].reset_index(drop=True)
     d = d[d.conf != "l"]                                     # drop low-confidence
     d = d[~((d.country == "DZA") & (d.lat < C.DZA_MIN_LAT))]  # Sahara out
     d["key"] = (d.lat.round(4).astype(str) + d.lon.round(4).astype(str)
