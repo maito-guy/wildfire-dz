@@ -102,6 +102,8 @@ model:
       bagging_fraction: 0.8
       bagging_freq: 1
       verbose: -1
+  drop_features: [wind_dir_now, wind_from_2h]  # raw degrees (359 and 1 look far apart) acted as a fire id;
+                                           # direction reaches the model through downwind_cos / wind_along
   n_seeds: 3                               # C = mean of this many boosters (steadier zones)
   val_fraction: 0.2                        # share of training fires held for threshold tuning
   seed: 42

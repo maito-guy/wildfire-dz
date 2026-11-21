@@ -31,8 +31,9 @@ def train(cfg: dict, countries: list[str] | None = None, tag: str = "mixed", tab
     m = cfg["model"]["lgbm"]
     out = repo_path(cfg["paths"]["artifacts"])
     out.mkdir(parents=True, exist_ok=True)
-    for old in out.glob(f"model_c_{tag}*.txt"):
-        old.unlink()
+    # only this tag's files: "model_c_dza*" would also delete model_c_dza_nowind_*
+    for old in [*out.glob(f"model_c_{tag}_s[0-9]*.txt"), out / f"model_c_{tag}.txt"]:
+        old.unlink(missing_ok=True)
     boosters, files = [], []
     for k in range(int(cfg["model"].get("n_seeds", 1))):
         params = dict(m["params"], seed=cfg["model"]["seed"] + k)
