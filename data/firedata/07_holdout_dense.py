@@ -23,6 +23,7 @@ def main():
     ap.add_argument("--events", action="store_true", help="crossval.events instead of the holdouts")
     ap.add_argument("--terrain", choices=["fire", "raster"], default="fire",
                     help="as in step 5: use the same value the training table was built with")
+    ap.add_argument("--out", default=None, help="default: out/holdout_dense.parquet (--events: out/events_dense.parquet)")
     a = ap.parse_args()
     B.TERRAIN = a.terrain
     if a.terrain == "raster":
@@ -30,7 +31,7 @@ def main():
         B.RASTER = static_raster.load()
     cfg = yaml.safe_load(REPO_CONFIG.read_text())
     holdouts = cfg["crossval"]["events"] if a.events else cfg["holdouts"]
-    target = C.OUT / ("events_dense.parquet" if a.events else "holdout_dense.parquet")
+    target = Path(a.out) if a.out else C.OUT / ("events_dense.parquet" if a.events else "holdout_dense.parquet")
     C.NEG_KEEP = C.NEG_KEEP_FAR = 1.0                  # keep every cell (weight becomes 1)
     C.CANDIDATE_RADIUS_CELLS = C.GRID_MARGIN_CELLS     # out to the edge of the terrain grid
     fires = pd.read_parquet(C.OUT / "fires.parquet").set_index("fire_id")

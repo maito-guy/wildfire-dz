@@ -9,9 +9,10 @@ Pairs  : each pass k with the next pass (hop 1) and with passes k+2 .. k+MAX_HOP
 Weather: values at the first pass, the actual values 1 h and 2 h later (a perfect forecast,
          since history has no forecasts), and hours since the last rain.
 Pairs with no weather or terrain file yet are skipped, so you can rerun after steps 3-4 finish.
-    python 05_build_table.py [--kind short|long|both] [--max-hops 4] [--out out/train.parquet] [--terrain fire|raster]
+    python 05_build_table.py [--kind short|long|both] [--max-hops 4] [--out out/train.parquet] [--terrain fire|raster] [--countries DZA]
 Rows are built by core/features.py, the same code the API uses (#18). --terrain raster reads terrain and fuel
-from the national 375 m raster (paths.static_raster) instead of step 4's per-fire files.
+from the national 375 m raster (paths.static_raster) instead of step 4's per-fire files; fires whose grid is
+not fully on the raster (outside northern Algeria) are skipped as no_static.
 """
 import argparse, json, sys
 from pathlib import Path
@@ -42,7 +43,10 @@ def grid_of(f):
 def terrain_for(fid, f):
     """Terrain source: the national raster when TERRAIN == "raster" (Q-05), else the fire's step 4 file."""
     if TERRAIN == "raster":
-        return F.raster_terrain(RASTER, grid_of(f))
+        g = grid_of(f)
+        corners = RASTER.cell_index([g.lat0, g.lat0 + g.ny * g.cell_m / F.M_PER_DEG_LAT],
+                                    [g.lon0, g.lon0 + g.nx * g.cell_m / g.mlon])[2]
+        return F.raster_terrain(RASTER, g) if corners.all() else None   # fire grid not fully on the raster
     sp = C.CACHE_STATIC / f"{fid}.npz"
     return F.fire_npz_terrain(dict(np.load(sp))) if sp.exists() else None
 
@@ -105,6 +109,7 @@ def main():
     ap = argparse.ArgumentParser(); ap.add_argument("--kind", default="both")
     ap.add_argument("--max-hops", type=int, default=getattr(C, "MAX_HOPS", 1))
     ap.add_argument("--out", default=None, help="default: out/train.parquet")
+    ap.add_argument("--countries", nargs="*", default=None, help="e.g. DZA; default = every country")
     ap.add_argument("--terrain", choices=["fire", "raster"], default="fire",
                     help="raster: terrain/fuel from config.yaml paths.static_raster (Q-05), not step 4's files")
     a = ap.parse_args()
@@ -118,6 +123,8 @@ def main():
                      pd.read_parquet(C.OUT / "passes.parquet"), a.max_hops)
     if a.kind != "both":
         pairs = pairs[pairs.kind == a.kind]
+    if a.countries:
+        pairs = pairs[pairs.fire_id.isin(fires.index[fires.country.isin(a.countries)])]
     cells_all = pd.read_parquet(C.OUT / "pass_cells.parquet")
     cells_by_fire = {fid: {k: c for k, c in g.groupby("pass_idx")} for fid, g in cells_all.groupby("fire_id")}
     out, skipped = [], {"no_weather": 0, "no_static": 0, "weather_gap": 0}
