@@ -18,7 +18,7 @@ B = importlib.import_module("05_build_table")
 
 def main():
     holdouts = yaml.safe_load(REPO_CONFIG.read_text())["holdouts"]
-    C.NEG_KEEP = 1.0                                   # keep every cell (weight becomes 1)
+    C.NEG_KEEP = C.NEG_KEEP_FAR = 1.0                  # keep every cell (weight becomes 1)
     C.CANDIDATE_RADIUS_CELLS = C.GRID_MARGIN_CELLS     # out to the edge of the terrain grid
     fires = pd.read_parquet(C.OUT / "fires.parquet").set_index("fire_id")
     pairs = pd.read_parquet(C.OUT / "pairs.parquet")

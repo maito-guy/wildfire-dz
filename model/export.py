@@ -27,12 +27,16 @@ def export(cfg: dict, tag: str | None) -> dict:
         "model_c": None,
     }
     if tag:
-        src = art / f"model_c_{tag}.txt"
-        if not src.exists() or f"C_{tag}" not in th:
-            raise FileNotFoundError(f"model_c_{tag}.txt or its threshold missing; train + evaluate first")
-        shutil.copy(src, art / "model_c.txt")
-        shutil.copy(art / f"features_{tag}.json", art / "features.json")
-        manifest["model_c"] = {"tag": tag, "file": "model_c.txt", "prob_threshold": th[f"C_{tag}"]["prob"]}
+        feats = art / f"features_{tag}.json"
+        if not feats.exists() or f"C_{tag}" not in th:
+            raise FileNotFoundError(f"features_{tag}.json or its threshold missing; train + evaluate first")
+        files = json.loads(feats.read_text()).get("files") or [f"model_c_{tag}.txt"]
+        missing = [f for f in files if not (art / f).exists()]
+        if missing:
+            raise FileNotFoundError(f"model files missing: {missing}")
+        shutil.copy(feats, art / "features.json")
+        manifest["model_c"] = {"tag": tag, "features": "features.json", "files": files,
+                               "prob_threshold": th[f"C_{tag}"]["prob"]}
     (art / "api_manifest.json").write_text(json.dumps(manifest, indent=2))
     print(json.dumps(manifest, indent=2))
     return manifest

@@ -1,8 +1,10 @@
+
 -include .env
 export
 
 PY ?= .venv/bin/python
 PORT ?= 8000
+EXPORT ?= $(HOME)/Downloads/algeria-fire-map-data/detections.csv
 
 .PHONY: help setup dev api dashboard-dev dashboard-build test lint fmt check-columns train train-dza evaluate export model data lan-ip demo-check docker-up docker-down docker-logs
 
@@ -55,8 +57,9 @@ export:          ## publish artifacts for the API (TAG=mixed to ship C)
 model: train train-dza evaluate   ## full model loop
 
 data:            ## run the firedata pipeline (laptop only; see data/README.md)
-	cd data && ../$(PY) 01_download_firms.py && ../$(PY) 02_clean.py --export detections.csv \
-	  && ../$(PY) 03_weather.py && ../$(PY) 04_terrain_fuel.py && ../$(PY) 05_build_table.py
+	cd data/firedata && export FIREDATA_DIR=.. && ../../$(PY) 01_download_firms.py \
+	  && ../../$(PY) 02_clean.py --export $(EXPORT) \
+	  && ../../$(PY) 03_weather.py && ../../$(PY) 04_terrain_fuel.py && ../../$(PY) 05_build_table.py
 
 docker-up:       ## build and start the whole demo in Docker (API + dashboard + phone page) on :$(PORT)
 	@mkdir -p data/out model/artifacts

@@ -25,12 +25,10 @@ is the pass before. Scores use that window instead of pretending to know the min
 Models: A and B through the same arrival grid the API uses. C gives a time by asking its 1 h model
 "burning by g minutes?" for g in C_GAPS and taking the first g over its threshold. C only has
 cells near the fire (data step 7, 6 km); elsewhere it falls back to B, and the share is reported.
+"B@C_x" and "C@C_x" score B and C on exactly the village-passes where C has a cell (like for like).
 """
 from __future__ import annotations
 
-import json
-
-import lightgbm as lgb
 import numpy as np
 import pandas as pd
 
@@ -105,13 +103,14 @@ def baseline_minutes(model, rate, g, plat, plon, wind, cfg):
     return np.array([arrival_at(grid, a, b) for a, b in zip(plat, plon)])
 
 
-def c_minutes(rows: pd.DataFrame, booster, feats, thr) -> np.ndarray:
-    """First g in C_GAPS where P(burning within g) >= thr; inf if never."""
-    base = rows[[f for f in feats if f not in ("gap_min", "is_short")]].copy()
+def c_minutes(rows: pd.DataFrame, model, thr: float, cfg: dict) -> np.ndarray:
+    """First g in C_GAPS where P(burning within g) >= thr; inf if never. Taking the first crossing
+    keeps the answer consistent even where the trees are not monotone in g."""
     first = np.full(len(rows), np.inf)
+    lo, hi = cfg["model"].get("short_pair_min", [20, 120])
     for g in C_GAPS:
-        X = base.assign(gap_min=g, is_short=int(20 <= g <= 120))[feats]
-        p = booster.predict(X)
+        kind = cfg["model"]["kind_for_1h"] if lo <= g <= hi else "long"
+        p = model.predict_rows(rows.assign(**{cfg["columns"]["gap_min"]: g, cfg["columns"]["kind"]: kind}), cfg)
         first = np.where(np.isinf(first) & (p >= thr), g, first)
     return first
 
@@ -214,9 +213,12 @@ def evaluate_villages(cfg: dict, thresholds: dict, boosters: dict) -> dict:
         dense = dense_all[dense_all.holdout == key] if dense_all is not None else None
         c_min = {}
         if dense is not None:
-            for tag, (b, feats) in boosters.items():
-                c_min[tag] = c_minutes(dense, b, feats, thresholds[f"C_{tag}"]["prob"])
-        rows = {m: [] for m in ["A", "B"] + [f"C_{t}" for t in c_min]}
+            for tag, model in boosters.items():
+                th = thresholds[f"C_{tag}"]
+                c_min[tag] = c_minutes(dense, model, th.get("prob_time", th["prob"]), cfg)
+        # "<m>@C_<tag>": the same model scored only where C has a cell, for a like-for-like comparison
+        rows = {m: [] for m in ["A", "B"] + [f"C_{t}" for t in c_min]
+                + [f"{x}@C_{t}" for t in c_min for x in ("B", "C")]}
         c_fallback = {t: [0, 0] for t in c_min}
         radius = cfg["villages"]["radius_km"] * 1000
         for t, g in rp.groupby("t", sort=True):
@@ -236,10 +238,12 @@ def evaluate_villages(cfg: dict, thresholds: dict, boosters: dict) -> dict:
                 c_fallback[tag][0] += int(fb.sum())
                 c_fallback[tag][1] += len(got)
                 rows[f"C_{tag}"].append(pd.DataFrame({"vid": vid, "t": t, "minutes": np.where(fb, mins["B"], got)}))
+                rows[f"C@C_{tag}"].append(pd.DataFrame({"vid": vid[~fb], "t": t, "minutes": got[~fb]}))
+                rows[f"B@C_{tag}"].append(pd.DataFrame({"vid": vid[~fb], "t": t, "minutes": mins["B"][~fb]}))
         out[key] = {}
         for m, parts in rows.items():
             res = score(pd.concat(parts, ignore_index=True), pl, cfg) if parts else {"status": "no passes"}
-            if m.startswith("C_"):
+            if m.startswith("C_") and m[2:] in c_fallback:
                 n_fb, n = c_fallback[m[2:]]
                 res["fallback_to_B_share"] = round(n_fb / max(n, 1), 4)
             out[key][m] = res
@@ -247,9 +251,6 @@ def evaluate_villages(cfg: dict, thresholds: dict, boosters: dict) -> dict:
 
 
 def load_boosters(cfg: dict) -> dict:
-    art = repo_path(cfg["paths"]["artifacts"])
-    out = {}
-    for p in sorted(art.glob("model_c_*.txt")):
-        tag = p.stem.removeprefix("model_c_")
-        out[tag] = (lgb.Booster(model_file=str(p)), json.loads((art / f"features_{tag}.json").read_text())["features"])
-    return out
+    from model import ensemble
+
+    return ensemble.load_all(repo_path(cfg["paths"]["artifacts"]))

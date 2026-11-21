@@ -46,8 +46,12 @@ LONG_PAIR = (120, 16 * 60) # teaches longer runs
 JITTER_CELLS = 1
 
 # Training rows: candidate cells within this many cells (x 375 m) of the current fire
-CANDIDATE_RADIUS_CELLS = 8   # 3 km
+CANDIDATE_RADIUS_CELLS = 16  # 6 km: as far as the dashboard asks the model (step 7 grid edge)
+NEAR_CELLS = 8               # 3 km: inside this, negatives are kept at NEG_KEEP, beyond at NEG_KEEP_FAR
 NEG_KEEP = 0.3               # keep this share of negative cells (weight column corrects for it)
+NEG_KEEP_FAR = 0.08          # far cells rarely burn; keep fewer so the table stays small
+MAX_HOPS = 4                 # also pair pass k with k+2 .. k+MAX_HOPS (gap <= LONG_PAIR[1]):
+                             # teaches "burning within g minutes" for many g, i.e. arrival time
 GRID_MARGIN_CELLS = 16       # margin around each fire's bounding box for terrain/fuel grids
 
 # Remote rasters (public, no key)

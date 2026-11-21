@@ -32,6 +32,7 @@ def fetch(lat, lon, start, end):
 
 def main():
     ap = argparse.ArgumentParser(); ap.add_argument("--max", type=int, default=9000)
+    ap.add_argument("--shard", default="0/1", help="i/n: this laptop does every n-th fire (split with friends)")
     ap.add_argument("--all", action="store_true", help="also fires that never grew (more calls)")
     a = ap.parse_args()
     fires = pd.read_parquet(C.OUT / "fires.parquet").set_index("fire_id")
@@ -43,7 +44,8 @@ def main():
     else:
         order = C.growing_fires(fires, pairs)   # grew, Algeria first, COUNTRY_CAP applied
         useful = order.g
-    todo = [f for f in order.index if not (C.CACHE_WEATHER / f"{f}.json").exists()]
+    i, n_sh = map(int, a.shard.split("/"))
+    todo = [f for f in order.index[i::n_sh] if not (C.CACHE_WEATHER / f"{f}.json").exists()]
     print(f"{len(useful):,} fires to cover, {len(todo):,} still need weather")
     for n, fid in enumerate(todo[: a.max], 1):
         f = fires.loc[fid]
