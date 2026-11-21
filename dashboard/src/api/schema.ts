@@ -413,6 +413,12 @@ export interface components {
             ai_minutes_left?: number | null;
             /** Ai Opinion */
             ai_opinion?: ("likely" | "possible" | "unlikely") | null;
+            /**
+             * Model
+             * @default B
+             * @enum {string}
+             */
+            model: "B" | "C";
             /** Distance Km */
             distance_km: number;
             /** Fire Direction */
@@ -745,6 +751,14 @@ export interface components {
             ai_minutes_left?: number | null;
             /** Ai Opinion */
             ai_opinion?: ("likely" | "possible" | "unlikely") | null;
+            /** B Minutes Left */
+            b_minutes_left?: number | null;
+            /**
+             * Model
+             * @default B
+             * @enum {string}
+             */
+            model: "B" | "C";
             /**
              * Status
              * @enum {string}
