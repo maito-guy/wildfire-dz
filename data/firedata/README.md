@@ -11,6 +11,7 @@ python 02_clean.py --export path/to/detections.csv   # ~5-30 min
 python 03_weather.py                  # resumable; max ~9,000 fires a day (free Open-Meteo limit)
 python 04_terrain_fuel.py             # resumable; ~1-3 s per fire
 python 05_build_table.py              # -> data/out/train.parquet
+python 05_build_table.py --terrain raster   # same, terrain/fuel from out/static_375m.npz (Q-05, #18)
 python 06_places_replay.py --export-dir path/to/export   # -> places + replay_passes (API)
 python 07_holdout_dense.py            # -> holdout_dense (village scoring on the holdouts)
 python 06_places_replay.py --events && python 07_holdout_dense.py --events   # -> crossval.events files

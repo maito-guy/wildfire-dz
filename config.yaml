@@ -27,6 +27,13 @@ static_raster:                             # data/build_static_raster.py (`make 
   chunk_cells: 128                         # cells per chunk side (48 km); each chunk is cached, so the build resumes
   cache_dir: data/cache_static_raster      # per-chunk cache (git-ignored)
 
+features:                                  # core/features.py (#18): model C's rows, for training and the API alike
+  grid_margin_cells: 16                    # cells around the fire's detections (6 km); these four must equal
+  candidate_radius_cells: 16               # data/firedata/config.py (tests/test_features.py checks it)
+  jitter_cells: 1                          # cells next to the burned area are never candidates (geolocation)
+  weather_lookback_days: 10                # hours_since_rain counts back at most this far
+  pass_split_min: 15                       # same satellite, detections less than this apart = one pass
+
 grid:
   cell_m: 375                              # VIIRS I-band cell
   max_radius_km: 15                        # prediction grid extends this far around the fire
