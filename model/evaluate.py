@@ -41,6 +41,24 @@ def cell_metrics(df: pd.DataFrame, flagged: np.ndarray, cfg: dict) -> dict:
     }
 
 
+MATCHED_RECALLS = (0.90, 0.95)
+
+
+def matched_recall(df: pd.DataFrame, score: np.ndarray, cfg: dict) -> dict:
+    """Zone size and false alarms when each model's cut is set on THIS fire to catch exactly r of
+    its burned cells. Uses the held-out labels to pick the cut, so it is a fair side-by-side
+    comparison of ranking quality, not a deployable threshold."""
+    y = df[cfg["columns"]["label"]].to_numpy() == 1
+    if not y.any():
+        return {}
+    out = {}
+    for r in MATCHED_RECALLS:
+        cut = np.quantile(score[y], 1 - r)
+        m = cell_metrics(df, score >= cut, cfg)
+        out[f"{r:.2f}"] = {k: m[k] for k in ("recall_1h", "false_alarm_cell_share", "zone_cells_per_burned_cell")}
+    return out
+
+
 def village_metrics_placeholder() -> dict:
     return {"missed_villages": None, "median_lead_min": None, "false_alarm_villages": None,
             "status": NOT_MEASURED}
@@ -85,13 +103,17 @@ def evaluate(cfg: dict, table: str | None = None) -> dict:
         if hdf.empty:
             entry["status"] = "no rows matched this holdout: check bbox/dates in config.yaml"
         else:
+            entry["matched_recall"] = {}
             for m in ("A", "B"):
-                flagged = baselines.required_rate(hdf, m, cfg) <= thresholds[m]["rate_m_per_min"]
+                need = baselines.required_rate(hdf, m, cfg)
+                flagged = need <= thresholds[m]["rate_m_per_min"]
                 entry["models"][m] = cell_metrics(hdf, flagged, cfg) | village_metrics_placeholder()
+                entry["matched_recall"][m] = matched_recall(hdf, -need, cfg)  # lower rate needed = more at risk
             for tag, (b, feats) in boosters.items():
                 prob = b.predict(to_matrix(hdf, [f for f in feats if f != "is_short"], cfg)[feats])
                 flagged = prob >= thresholds[f"C_{tag}"]["prob"]
                 entry["models"][f"C_{tag}"] = cell_metrics(hdf, flagged, cfg) | village_metrics_placeholder()
+                entry["matched_recall"][f"C_{tag}"] = matched_recall(hdf, prob, cfg)
         board["fires"].append(entry)
 
     board["ship_c"] = {"rule": "C ships only if it beats B on missed villages and lead time",
