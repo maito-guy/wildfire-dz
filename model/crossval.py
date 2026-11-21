@@ -73,6 +73,46 @@ def train_c(tr: pd.DataFrame, va: pd.DataFrame, raw: list[str], cfg: dict, n_see
     return ModelC(boosters, {"tag": "cv", "features": list(Xtr.columns), "raw_features": raw})
 
 
+class CachedC:
+    """C whose predictions are reused: villages.c_minutes asks the same rows for the same gaps once
+    per threshold, and the sweep below scores several thresholds on the same event cells."""
+
+    def __init__(self, model: ModelC):
+        self.model, self.meta, self._cache = model, model.meta, {}
+
+    def predict_rows(self, df: pd.DataFrame, cfg: dict) -> np.ndarray:
+        c = cfg["columns"]
+        key = (float(df[c["gap_min"]].iloc[0]), str(df[c["kind"]].iloc[0]), len(df), df.index[0], df.index[-1])
+        if df[c["gap_min"]].nunique() != 1 or key not in self._cache:
+            p = self.model.predict_rows(df, cfg)
+            if df[c["gap_min"]].nunique() != 1:
+                return p
+            self._cache[key] = p
+        return self._cache[key]
+
+
+def village_sweep(vill: dict, recalls: list[float]) -> dict:
+    """Villages pooled over the named events the fire reached, per C caution setting. 'C@' and 'B@' are
+    the village-passes where C has a cell (like for like); 'C'/'B' are the whole 15 km area (C falls
+    back to B beyond its cells)."""
+    keys = ("villages_reached", "missed_villages", "missed_villages_judged", "missed_any_alert",
+            "too_slow_at_last_pass_villages", "villages_told_leave_now", "false_alarm_villages")
+    out = {}
+    for r in recalls:
+        tag = f"cv_{round(r * 1e4)}"
+        for name, m in ((f"C@ {r}", f"C@C_{tag}"), (f"B@ (same cells as C@ {r})", f"B@C_{tag}"),
+                        (f"C {r}", f"C_{tag}")):
+            tot = {k: 0 for k in keys}
+            for ev in vill.values():
+                x = ev.get(m, {})
+                for k in keys:
+                    tot[k] += int(x.get(k) or 0)
+            out[name] = tot
+    tot = {k: sum(int(ev.get("B", {}).get(k) or 0) for ev in vill.values()) for k in keys}
+    out["B"] = tot
+    return out
+
+
 def slice_metrics(d: pd.DataFrame, cfg: dict) -> dict:
     """d: pooled test rows with columns score_<m>, flag_<m> for each model."""
     out = {"n_fires": int(d[cfg["columns"]["fire_id"]].nunique())}
@@ -168,8 +208,13 @@ def crossval(cfg: dict) -> dict:
         keys = {k for k, ev in cv.get("events", {}).items() if pd.Timestamp(ev["start"]).year == y}
         if keys:
             th = {"A": {"rate_m_per_min": baselines.tune_rate(pos_all, "A", cfg)},
-                  "B": {"rate_m_per_min": rate_all}, "C_cv": {"prob": thr, "prob_time": thr}}
-            vill.update(villages.evaluate_villages(cfg, th, {"cv": model}, "events_replay", "events_dense", keys))
+                  "B": {"rate_m_per_min": rate_all}}
+            recalls = cv["time_recalls"]   # C's caution, each threshold set on validation fires only
+            cached, models = CachedC(model), {}
+            for r, t in zip(recalls, time_threshold(model, va[va[c["label"]] == 1], cfg, recalls)):
+                tag = f"cv_{round(r * 1e4)}"
+                th[f"C_{tag}"], models[tag] = {"prob": t, "prob_time": t}, cached
+            vill.update(villages.evaluate_villages(cfg, th, models, "events_replay", "events_dense", keys))
         fold_info.append({"year": int(y), "test_fires": int(test[c["fire_id"]].nunique()),
                           "train_fires": int(tr[c["fire_id"]].nunique()), "rate_B_all": round(rate_all, 1),
                           "rate_B_dza": round(rate_dza, 1), "c_threshold": thr,
@@ -194,6 +239,7 @@ def crossval(cfg: dict) -> dict:
         report["by_event"][key] = ({"name": ev["name"]} | slice_metrics(d[d[c["fire_id"]].isin(ids)], cfg)
                                    if ids else {"name": ev["name"], "status": "no fires matched: check bbox/dates"})
         report["by_event"][key]["villages"] = vill.get(key, {"status": "not measured: run data steps 6 and 7 --events"})
+    report["village_sweep"] = village_sweep(vill, cv["time_recalls"])
     art = repo_path(cfg["paths"]["artifacts"])
     (art / "crossval.json").write_text(json.dumps(report, indent=2))
     return report

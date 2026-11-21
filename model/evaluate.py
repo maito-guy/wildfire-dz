@@ -111,10 +111,11 @@ def va_all_pos(df: pd.DataFrame, cfg: dict, countries) -> pd.DataFrame:
     return va[va[cfg["columns"]["label"]] == 1]
 
 
-def time_threshold(model, pos: pd.DataFrame, cfg: dict) -> float:
+def time_threshold(model, pos: pd.DataFrame, cfg: dict, recall: float | list[float] | None = None):
     """Threshold for minutes-to-arrival (villages.c_minutes): C's predicted arrival must be no later
     than the real one for target_recall of the burned cells of the validation fires. A cell counts as
-    on time if, at some step g <= its real gap, P(burning by g) >= threshold."""
+    on time if, at some step g <= its real gap, P(burning by g) >= threshold.
+    recall: override safety.time_target_recall; a list returns one threshold per value."""
     c = cfg["columns"]
     gap = pos[c["gap_min"]].to_numpy(dtype=float)
     best = np.zeros(len(pos))
@@ -126,7 +127,9 @@ def time_threshold(model, pos: pd.DataFrame, cfg: dict) -> float:
         kind = cfg["model"]["kind_for_1h"] if lo <= g <= hi else "long"
         p = model.predict_rows(pos.assign(**{c["gap_min"]: g, c["kind"]: kind}), cfg)
         best = np.where(ok, np.maximum(best, p), best)
-    r = cfg["safety"].get("time_target_recall", cfg["safety"]["target_recall"])
+    if isinstance(recall, list):
+        return [float(np.quantile(best, 1 - r)) for r in recall]
+    r = recall or cfg["safety"].get("time_target_recall", cfg["safety"]["target_recall"])
     return float(np.quantile(best, 1 - r))
 
 

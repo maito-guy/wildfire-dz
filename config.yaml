@@ -70,6 +70,8 @@ holdouts:                                  # whole fires, never random rows. Bbo
 crossval:                                  # model/crossval.py: every Algerian year is the test set once
   countries: [DZA]                         # fires that are tested (and C is trained on)
   n_seeds: 1                               # 1 booster per fold (speed); the shipped C averages model.n_seeds
+  time_recalls: [0.99, 0.995, 0.998, 0.999, 0.9995]  # C's caution on villages: each = "C is late on at most
+                                           # 1 - x of burned cells" on VALIDATION fires (never the test events)
   regions:                                 # longitude bands, for "does it work in the west too?"
     west: [-9.0, 2.0]
     centre: [2.0, 5.5]
