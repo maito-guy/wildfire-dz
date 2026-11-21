@@ -27,12 +27,13 @@ def check_columns(df: pd.DataFrame, cfg: dict) -> None:
         )
 
 
-def holdout_fire_ids(df: pd.DataFrame, cfg: dict) -> dict[str, set]:
-    """A fire is held out if any of its rows falls inside a holdout's time window and bbox."""
+def holdout_fire_ids(df: pd.DataFrame, cfg: dict, events: dict | None = None) -> dict[str, set]:
+    """A fire belongs to an event if any of its rows falls inside the event's time window and bbox.
+    events: {key: {start, end, bbox}}; default config.yaml -> holdouts (crossval.py passes crossval.events)."""
     c = cfg["columns"]
     t = pd.to_datetime(df[c["t1"]], utc=True)
     out: dict[str, set] = {}
-    for key, h in cfg["holdouts"].items():
+    for key, h in (cfg["holdouts"] if events is None else events).items():
         lon_min, lat_min, lon_max, lat_max = h["bbox"]
         start = pd.Timestamp(h["start"], tz="UTC")
         end = pd.Timestamp(h["end"], tz="UTC") + pd.Timedelta(days=1)

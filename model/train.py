@@ -16,6 +16,17 @@ from model.features import feature_columns, load_table, split, to_matrix
 from model.wind import WIND_FEATURES
 
 
+def fit_boosters(Xtr, ytr, wtr, Xva, yva, wva, cfg: dict, n_seeds: int) -> list[lgb.Booster]:
+    """n_seeds LightGBM boosters (model.lgbm, seeds model.seed + k), early-stopped on the validation fires.
+    Shared by train() and model/crossval.py so the shipped C and the cross-validated C are the same recipe."""
+    m = cfg["model"]["lgbm"]
+    dtr = lgb.Dataset(Xtr, ytr, weight=wtr, free_raw_data=False)
+    dva = lgb.Dataset(Xva, yva, weight=wva, reference=dtr)
+    return [lgb.train(dict(m["params"], seed=cfg["model"]["seed"] + k), dtr, num_boost_round=m["num_boost_round"],
+                      valid_sets=[dva], callbacks=[lgb.early_stopping(m["early_stopping_rounds"], verbose=False)])
+            for k in range(n_seeds)]
+
+
 def train(cfg: dict, countries: list[str] | None = None, tag: str = "mixed", table: str | None = None,
           no_wind: bool = False):
     df = load_table(cfg, table)
@@ -26,23 +37,17 @@ def train(cfg: dict, countries: list[str] | None = None, tag: str = "mixed", tab
     if no_wind:                                        # the "wind unknown" model (model/wind.py)
         keep = [col for col in Xtr.columns if col not in WIND_FEATURES]
         Xtr, Xva = Xtr[keep], Xva[keep]
-    dtr = lgb.Dataset(Xtr, tr[c["label"]], weight=tr[c["weight"]], free_raw_data=False)
-    dva = lgb.Dataset(Xva, va[c["label"]], weight=va[c["weight"]], reference=dtr)
-    m = cfg["model"]["lgbm"]
     out = repo_path(cfg["paths"]["artifacts"])
     out.mkdir(parents=True, exist_ok=True)
     # only this tag's files: "model_c_dza*" would also delete model_c_dza_nowind_*
     for old in [*out.glob(f"model_c_{tag}_s[0-9]*.txt"), out / f"model_c_{tag}.txt"]:
         old.unlink(missing_ok=True)
-    boosters, files = [], []
-    for k in range(int(cfg["model"].get("n_seeds", 1))):
-        params = dict(m["params"], seed=cfg["model"]["seed"] + k)
-        b = lgb.train(params, dtr, num_boost_round=m["num_boost_round"], valid_sets=[dva],
-                      callbacks=[lgb.early_stopping(m["early_stopping_rounds"], verbose=False)])
-        f = f"model_c_{tag}_s{k}.txt"
-        b.save_model(str(out / f))
-        boosters.append(b)
-        files.append(f)
+    boosters = fit_boosters(Xtr, tr[c["label"]], tr[c["weight"]], Xva, va[c["label"]], va[c["weight"]], cfg,
+                            int(cfg["model"].get("n_seeds", 1)))
+    files = []
+    for k, b in enumerate(boosters):
+        files.append(f"model_c_{tag}_s{k}.txt")
+        b.save_model(str(out / files[-1]))
     gain = sum(b.feature_importance("gain") for b in boosters)
     top = sorted(zip(Xtr.columns, gain), key=lambda x: -x[1])[:10]
     meta = {"tag": tag, "countries": countries or "all", "no_wind": no_wind, "files": files,

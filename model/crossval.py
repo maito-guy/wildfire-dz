@@ -28,7 +28,6 @@ import datetime as dt
 import json
 import time
 
-import lightgbm as lgb
 import numpy as np
 import pandas as pd
 import pyarrow.parquet as pq
@@ -37,7 +36,8 @@ from core.config import load_config, repo_path
 from model import baselines, villages
 from model.ensemble import ModelC
 from model.evaluate import cell_metrics, matched_recall, short_only, time_threshold
-from model.features import check_columns, feature_columns, to_matrix
+from model.features import check_columns, feature_columns, holdout_fire_ids, to_matrix
+from model.train import fit_boosters
 
 B_COLS = ("fire_id", "country", "t1", "kind", "hop", "gap_min", "label", "dist_active_m",
           "downwind_cos", "wind_speed_10m", "uphill_grade")
@@ -49,27 +49,10 @@ def fire_year(df: pd.DataFrame, cfg: dict) -> pd.Series:
     return first.dt.year
 
 
-def fires_in(df: pd.DataFrame, cfg: dict, ev: dict) -> set:
-    """Fire ids with a row inside the event's dates and bbox (same rule as the holdouts)."""
-    c = cfg["columns"]
-    t = pd.to_datetime(df[c["t1"]], utc=True)
-    lon_min, lat_min, lon_max, lat_max = ev["bbox"]
-    m = ((t >= pd.Timestamp(ev["start"], tz="UTC"))
-         & (t < pd.Timestamp(ev["end"], tz="UTC") + pd.Timedelta(days=1))
-         & df[c["lat"]].between(lat_min, lat_max) & df[c["lon"]].between(lon_min, lon_max))
-    return set(df.loc[m, c["fire_id"]].unique())
-
-
 def train_c(tr: pd.DataFrame, va: pd.DataFrame, raw: list[str], cfg: dict, n_seeds: int) -> ModelC:
-    c, m = cfg["columns"], cfg["model"]["lgbm"]
+    c = cfg["columns"]
     Xtr, Xva = to_matrix(tr, raw, cfg), to_matrix(va, raw, cfg)
-    dtr = lgb.Dataset(Xtr, tr[c["label"]], weight=tr[c["weight"]], free_raw_data=False)
-    dva = lgb.Dataset(Xva, va[c["label"]], weight=va[c["weight"]], reference=dtr)
-    boosters = []
-    for k in range(n_seeds):
-        params = dict(m["params"], seed=cfg["model"]["seed"] + k)
-        boosters.append(lgb.train(params, dtr, num_boost_round=m["num_boost_round"], valid_sets=[dva],
-                                  callbacks=[lgb.early_stopping(m["early_stopping_rounds"], verbose=False)]))
+    boosters = fit_boosters(Xtr, tr[c["label"]], tr[c["weight"]], Xva, va[c["label"]], va[c["weight"]], cfg, n_seeds)
     return ModelC(boosters, {"tag": "cv", "features": list(Xtr.columns), "raw_features": raw})
 
 
@@ -228,14 +211,17 @@ def crossval(cfg: dict) -> dict:
               "folds": fold_info, "overall": slice_metrics(d, cfg), "by_distance": by_distance(d, cfg),
               "by_year": {}, "by_region": {}, "by_event": {}}
     # every test prediction, so later questions do not need a rerun
-    d.to_parquet(repo_path("data/runs") / "crossval_pooled.parquet", index=False)
+    pooled_path = repo_path(cfg["paths"]["crossval_pooled"])
+    pooled_path.parent.mkdir(parents=True, exist_ok=True)
+    d.to_parquet(pooled_path, index=False)
     yr = fire_year(d, cfg)
     for y in years:
         report["by_year"][str(y)] = slice_metrics(d[yr == y], cfg)
     for name, (lo, hi) in cv["regions"].items():
         report["by_region"][name] = slice_metrics(d[d[c["lon"]].between(lo, hi, inclusive="left")], cfg)
+    event_ids = holdout_fire_ids(d, cfg, cv.get("events", {}))
     for key, ev in cv.get("events", {}).items():
-        ids = fires_in(d, cfg, ev)
+        ids = event_ids[key]
         report["by_event"][key] = ({"name": ev["name"]} | slice_metrics(d[d[c["fire_id"]].isin(ids)], cfg)
                                    if ids else {"name": ev["name"], "status": "no fires matched: check bbox/dates"})
         report["by_event"][key]["villages"] = vill.get(key, {"status": "not measured: run data steps 6 and 7 --events"})

@@ -11,6 +11,7 @@ paths:
   holdout_dense: data/out/holdout_dense.parquet  # every cell around the holdout fires (data step 7), to score C on villages
   events_replay: data/out/events_replay.parquet  # same, for crossval.events (step 6 --events); only crossval.py reads them
   events_dense: data/out/events_dense.parquet    # (step 7 --events)
+  crossval_pooled: data/runs/crossval_pooled.parquet  # every cross-validation test prediction (model/crossval.py)
   artifacts: model/artifacts               # model_c.txt, thresholds.json, scoreboard.json, features.json
   alert_texts: alert/texts.json
   risk_today: model/artifacts/risk_today.parquet  # daily risk cells from model.risk (#27, docs/contracts.md); stub cells if missing
