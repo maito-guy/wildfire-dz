@@ -67,10 +67,10 @@ def test_config_registers_the_file():
 
 
 def test_columns_match_training_table_names():
-    """The names 05_build_table.py writes for terrain and fuel."""
-    src = (ROOT / "data" / "firedata" / "05_build_table.py").read_text()
-    for k in ("elev", "elev_std", "slope", "aspect_sin", "aspect_cos"):
-        assert f'"{k}"' in src
+    """The names 05_build_table.py writes for terrain and fuel (built by core/features.py since #18)."""
+    from core import features
+    st = {k: np.zeros((2, 2), np.float32) for k in sr.LAYERS}
+    assert tuple(features.fire_npz_terrain(st)(np.array([0]), np.array([0]))) == sr.COLUMNS
     cfg = (ROOT / "data" / "firedata" / "config.py").read_text()
     for n in sr.FUEL_NAMES:
         assert f'"{n}"' in cfg

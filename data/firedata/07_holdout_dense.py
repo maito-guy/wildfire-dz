@@ -5,6 +5,7 @@ most villages have no row. This reruns step 5's row builder (unchanged) on the h
 all cells kept out to the edge of each fire's terrain grid (GRID_MARGIN_CELLS, 6 km).
     python 07_holdout_dense.py              # holdouts        -> out/holdout_dense.parquet
     python 07_holdout_dense.py --events     # crossval.events -> out/events_dense.parquet
+    add --terrain raster if step 5 was run with it
 Output: out/holdout_dense.parquet = train.parquet columns + holdout + the fire's grid origin
 (grid_lat0, grid_lon0, grid_mlon) so a village can be mapped to its cell.
 """
@@ -20,7 +21,13 @@ B = importlib.import_module("05_build_table")
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--events", action="store_true", help="crossval.events instead of the holdouts")
+    ap.add_argument("--terrain", choices=["fire", "raster"], default="fire",
+                    help="as in step 5: use the same value the training table was built with")
     a = ap.parse_args()
+    B.TERRAIN = a.terrain
+    if a.terrain == "raster":
+        from core import static_raster
+        B.RASTER = static_raster.load()
     cfg = yaml.safe_load(REPO_CONFIG.read_text())
     holdouts = cfg["crossval"]["events"] if a.events else cfg["holdouts"]
     target = C.OUT / ("events_dense.parquet" if a.events else "holdout_dense.parquet")
@@ -38,18 +45,18 @@ def main():
         hp = pairs[pairs.fire_id.isin(inbox) & (pairs.t1 >= t0) & (pairs.t1 < t1)]
         n_rows = 0
         for fid, fp in hp.groupby("fire_id"):
-            sp = C.CACHE_STATIC / f"{fid}.npz"
+            f = fires.loc[fid]
+            terrain = B.terrain_for(fid, f)
             wth = B.load_weather(fid)
-            if not sp.exists() or wth is None:
+            if terrain is None or wth is None:
                 continue                               # fire never grew: no terrain/weather fetched
-            st = dict(np.load(sp)); f = fires.loc[fid]
             cells = {k: c for k, c in cells_all[cells_all.fire_id == fid].groupby("pass_idx")}
             rng = np.random.default_rng(int(fid))
             for pr in fp.itertuples():
                 wx = B.weather_at(wth, pr.t1)
                 if wx is None:
                     continue
-                df = B.rows_for_pair(pr, f, cells, st, wx, rng)
+                df = B.rows_for_pair(pr, f, cells, terrain, wx, rng)
                 if df is not None:
                     df["holdout"] = key
                     df["grid_lat0"], df["grid_lon0"], df["grid_mlon"] = f.lat0, f.lon0, f.mlon
