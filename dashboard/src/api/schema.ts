@@ -513,6 +513,31 @@ export interface components {
             /** Detections */
             detections: components["schemas"]["Detection"][];
         };
+        /** FireWeather */
+        FireWeather: {
+            /** Date */
+            date: string;
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "forecast" | "reanalysis";
+            /** Value */
+            value: number;
+            /**
+             * Level
+             * @enum {string}
+             */
+            level: "very_low" | "low" | "moderate" | "high" | "very_high" | "extreme";
+            /** Median */
+            median: number;
+            /** Points */
+            points: number;
+            /** Step Deg */
+            step_deg: number;
+            /** Capped Cells */
+            capped_cells: number;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -683,6 +708,9 @@ export interface components {
             cells: components["schemas"]["RiskCell"][];
             /** Places */
             places: components["schemas"]["RiskPlace"][];
+            fwi?: components["schemas"]["FireWeather"] | null;
+            /** Fwi Note */
+            fwi_note?: string | null;
         };
         /** ValidationError */
         ValidationError: {

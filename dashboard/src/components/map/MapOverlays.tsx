@@ -2,10 +2,11 @@
 // list of grouped toggles. Each group drives several map layers, so the operator sees five choices, not nine.
 // This card is the only place a layer is switched on or off; the dots double as the legend.
 // The AI estimate (model C, #53) is advice only: its row is disabled when /predict has no `ai` block.
+// The risk row also says the day's fire weather (FWI, #57), which caps the risk levels on calm days.
 import { Cube, Fire, MapTrifold, StackSimple, X } from "@phosphor-icons/react";
 import { useState } from "react";
 import { DETECTION_COLOR, HISTORY_RAMP } from "../../api/fireMap";
-import { RISK_COLOR } from "../../api/risk";
+import { FIRE_WEATHER_WORD, RISK_COLOR, type RiskResponse } from "../../api/risk";
 import { mapColors } from "../../map/colors";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -35,10 +36,24 @@ interface Props {
   onLayer: (k: LayerKey, v: boolean) => void;
   /** The current prediction has model C's zones (`PredictResponse.ai` is not null). */
   aiAvailable: boolean;
+  /** Today's risk answer, for the fire weather line under "Risk today". */
+  risk: RiskResponse | undefined;
 }
 
-export function MapControls({ basemap, onBasemap, layers, onLayer, aiAvailable }: Props) {
+function fireWeatherLine(risk: RiskResponse | undefined): { text: string; title: string } | null {
+  if (!risk) return null;
+  const fw = risk.fwi;
+  if (!fw) return risk.fwi_note ? { text: "Fire weather: unavailable", title: risk.fwi_note } : null;
+  const capped = fw.capped_cells > 0 ? ` ${fw.capped_cells} cells lowered to match the weather.` : "";
+  return {
+    text: `Fire weather: ${FIRE_WEATHER_WORD[fw.level]} (FWI ${Math.round(fw.value)})`,
+    title: `Worst of ${fw.points} weather points on ${fw.date} (median FWI ${fw.median}).${capped}`,
+  };
+}
+
+export function MapControls({ basemap, onBasemap, layers, onLayer, aiAvailable, risk }: Props) {
   const [open, setOpen] = useState(false);
+  const weather = fireWeatherLine(risk);
   return (
     <div className="flex flex-col items-end gap-2">
       <div className={floating("flex items-center gap-1 rounded-full p-1")}>
@@ -73,6 +88,7 @@ export function MapControls({ basemap, onBasemap, layers, onLayer, aiAvailable }
           {GROUPS.map((g) => {
             const id = `layer-${g.keys[0]}`;
             const isAi = g.keys[0] === "ai";
+            const isRisk = g.keys[0] === "risk";
             const off = isAi && !aiAvailable;
             return (
               <label
@@ -86,6 +102,11 @@ export function MapControls({ basemap, onBasemap, layers, onLayer, aiAvailable }
                   {isAi && (
                     <span className="block font-mono text-[10px] text-muted-foreground">
                       {off ? "no AI estimate for this fire" : "solid likely · dashed possible"}
+                    </span>
+                  )}
+                  {isRisk && weather && (
+                    <span className="block font-mono text-[10px] text-muted-foreground" title={weather.title}>
+                      {weather.text}
                     </span>
                   )}
                 </span>
