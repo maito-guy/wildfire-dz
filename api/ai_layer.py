@@ -119,10 +119,23 @@ def annotate(villages: list[dict], ai: dict | None, cfg: dict) -> None:
     """Set `ai_minutes_left` and `ai_opinion` on each village in place (both None when C has no answer)."""
     mins = village_minutes(villages, ai, cfg)
     horizon = float(cfg["status"]["get_ready_max_min"])     # "within 2 h", like B's get_ready
+    a = cfg.get("ai_layer", {})
+    level, max_min = a.get("village_level", "possible"), float(a.get("village_max_min", np.inf))
     for v in villages:
         m = mins.get(v["id"])
-        v["ai_minutes_left"] = m["possible"] if m else None
+        t = m[level] if m else None
+        v["ai_minutes_left"] = t if t is not None and t <= max_min else None
         v["ai_opinion"] = None if ai is None else opinion(m, horizon)
+
+
+def c_villages(villages: list[dict], cfg: dict) -> list[dict]:
+    """display.model C (D-18): the annotated villages C reaches (ai_minutes_left set), with C's minutes as
+    minutes_left and the status they give; B's minutes kept as b_minutes_left. The others are left out."""
+    from api.impact import status_for
+
+    return [v | {"minutes_left": m, "b_minutes_left": v.get("minutes_left"), "status": status_for(m, cfg),
+                 "model": "C"}
+            for v in villages if (m := v.get("ai_minutes_left")) is not None]
 
 
 def public(ai: dict | None) -> dict | None:

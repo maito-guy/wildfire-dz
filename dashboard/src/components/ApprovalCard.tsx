@@ -136,7 +136,7 @@ export function ApprovalCard({ alert: a, selected, onSelect, onApprove, onReject
       </button>
       {a.level !== "preventive" && (
         <p className="mt-2 font-mono text-[12px] font-semibold tabular-nums" title={BOTH_TIMES_TITLE}>
-          {fmtBothTimes(a.minutes_left, a.ai_minutes_left)}
+          {fmtBothTimes(a.minutes_left, a.ai_minutes_left, a.model)}
         </p>
       )}
       <p className={cn("font-mono text-[11.5px] leading-relaxed text-muted-foreground tabular-nums", a.level === "preventive" ? "mt-2" : "mt-1")}>

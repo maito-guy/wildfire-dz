@@ -96,6 +96,7 @@ export default function App() {
 
   // Ignore late /predict answers when a newer one was asked for (play, fast clicks).
   const predictSeq = useRef(0);
+  const cShownRef = useRef(false); // model C shown on the last answer (D-18)
 
   const healthQ = useQuery({
     queryKey: ["health"],
@@ -139,6 +140,14 @@ export default function App() {
       ...(id ? { fire_id: id } : {}),
     });
     if (seq !== predictSeq.current) return;
+    // D-18: when model C answers (replays), its "likely" zones replace B's on the map; B returns as the fallback.
+    const c = p.model === "C";
+    if (c !== cShownRef.current) {
+      cShownRef.current = c;
+      setLayers((l) =>
+        c ? { ...l, zone1h: false, zone2h: false, nextPass: false, detections: false } : { ...l, zone1h: true, zone2h: true },
+      );
+    }
     setPrediction(p);
     setBurning(points);
     setFireId(p.fire_id);
@@ -304,6 +313,7 @@ export default function App() {
         `model ${prediction.model}${prediction.embers_applied ? " · embers rule on" : ""} · click again to move it`
       : "";
   const setLayer = (k: LayerKey, v: boolean) => setLayers((l) => ({ ...l, [k]: v }));
+  const cShown = prediction?.model === "C";
   const pending = healthQ.data?.pending_alerts ?? 0;
   const health: HealthState = { data: healthQ.data, unreachable: healthQ.isError, updatedAt: healthQ.dataUpdatedAt };
   // A tab click on a hidden panel opens it again.
@@ -440,7 +450,7 @@ export default function App() {
             onScoreboard={() => setScoreOpen(true)}
             onSettings={() => setSettingsOpen(true)}
           />
-          <MapControls basemap={basemap} onBasemap={setBasemap} layers={layers} onLayer={setLayer} aiAvailable={!!prediction?.ai} risk={riskQ.data} />
+          <MapControls basemap={basemap} onBasemap={setBasemap} layers={layers} onLayer={setLayer} aiAvailable={!!prediction?.ai} cShown={cShown} risk={riskQ.data} />
         </div>
 
         <div className="order-3 lg:absolute lg:left-1/2 lg:top-0 lg:w-max lg:max-w-md lg:-translate-x-1/2">

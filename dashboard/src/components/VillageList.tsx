@@ -141,7 +141,7 @@ export function VillageList({ villages, alerts, busy, onSend, onCancel, onFocus 
                       {metaLine(v, sent)}
                     </span>
                     <span className="flex flex-wrap gap-x-1 font-mono text-[11.5px] text-muted-foreground tabular-nums" title={BOTH_TIMES_TITLE}>
-                      {bothTimesParts(v.minutes_left, v.ai_minutes_left).map((t) => (
+                      {bothTimesParts(v.minutes_left, v.ai_minutes_left, v.model).filter(Boolean).map((t) => (
                         <span key={t} className="whitespace-nowrap">
                           {t}
                         </span>

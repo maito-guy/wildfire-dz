@@ -164,7 +164,7 @@ class AlertStore:
              "created_at": _now(), "scenario_time": scenario_time, "approved_at": None,
              "rejected_at": None, "reject_reason": None, "cancelled_at": None, "edited": False,
              "minutes_left": v.get("minutes_left"), "ai_minutes_left": v.get("ai_minutes_left"),
-             "ai_opinion": v.get("ai_opinion"), "distance_km": v.get("distance_km") or 0.0,
+             "ai_opinion": v.get("ai_opinion"), "model": v.get("model", "B"), "distance_km": v.get("distance_km") or 0.0,
              "fire_direction": v.get("fire_direction", ""), "leave_toward": v.get("leave_toward", ""),
              "data_age_min": data_age_min,
              "area": {"lat": v["lat"], "lon": v["lon"], "radius_km": load_config()["api"]["alert_area_radius_km"]},
@@ -207,7 +207,7 @@ class AlertStore:
         if level in SEV and a["level"] in SEV:
             new_level = max(level, a["level"], key=SEV.get)
         new = {"level": new_level, "minutes_left": v.get("minutes_left"), "ai_minutes_left": v.get("ai_minutes_left"),
-               "ai_opinion": v.get("ai_opinion"), "distance_km": v.get("distance_km") or 0.0,
+               "ai_opinion": v.get("ai_opinion"), "model": v.get("model", "B"), "distance_km": v.get("distance_km") or 0.0,
                "fire_direction": v.get("fire_direction", ""), "leave_toward": v.get("leave_toward", ""), "data_age_min": data_age_min}
         if all(a[k] == val for k, val in new.items()):
             return a

@@ -72,8 +72,10 @@ class Village(BaseModel):
     lon: float
     distance_km: float                         # to the nearest burning cell
     minutes_left: int | None                   # None = not reached within the model's horizon
-    ai_minutes_left: int | None = None         # model C's possible-level arrival (#52); None = no C answer within 2 h
+    ai_minutes_left: int | None = None         # model C arrival (ai_layer.village_level, #52); None = none within 2 h
     ai_opinion: AiOpinion | None = None        # C's likely zone within 2 h | possible zone only | outside both (#58)
+    b_minutes_left: int | None = None          # display.model C: B's minutes, for reference (D-18)
+    model: Literal["B", "C"] = "B"             # the model behind minutes_left and status (D-18)
     status: Status                             # sticky: never back to "safe" while the fire is active
     fire_direction: str                        # compass direction of the fire, seen from the village
     leave_toward: str                          # compass direction to leave toward
@@ -113,6 +115,7 @@ class Alert(BaseModel):
     minutes_left: int | None
     ai_minutes_left: int | None = None         # model C's view when the flag was made or updated (#52), advice only
     ai_opinion: AiOpinion | None = None        # C's opinion of the village then (#58); orders the pending queue
+    model: Literal["B", "C"] = "B"             # the model behind minutes_left when the flag was made (D-18)
     distance_km: float
     fire_direction: str
     leave_toward: str

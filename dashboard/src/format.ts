@@ -31,14 +31,16 @@ export function fmtArrival(m: number | null | undefined): string {
 }
 
 /** Both models' arrival side by side, e.g. "B: 45 min · AI: 1 h 50". B is the model of record; AI is advice. */
-export const fmtBothTimes = (b: number | null | undefined, ai: number | null | undefined): string =>
-  bothTimesParts(b, ai).join(" ");
+export const fmtBothTimes = (b: number | null | undefined, ai: number | null | undefined, model?: "B" | "C"): string =>
+  bothTimesParts(b, ai, model).join(" ").trim();
 
 /** The same line in two pieces ("B: 45 min ·", "AI: 1 h 50"), so a narrow column can wrap between them. */
-export const bothTimesParts = (b: number | null | undefined, ai: number | null | undefined): [string, string] => [
-  `B: ${fmtArrival(b)} ·`,
-  `AI: ${fmtArrival(ai)}`,
-];
+export const bothTimesParts = (
+  b: number | null | undefined,
+  ai: number | null | undefined,
+  model?: "B" | "C",
+): [string, string] =>
+  model === "C" ? ["", `AI: ${fmtArrival(ai)}`] : [`B: ${fmtArrival(b)} ·`, `AI: ${fmtArrival(ai)}`]; // D-18: C alone
 
 /** Hover text for the B · AI line. C answers in steps (20, 30, 45 … 120), so 20 means "within 20 min". */
 export const BOTH_TIMES_TITLE =

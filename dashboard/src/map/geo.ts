@@ -77,7 +77,9 @@ export function zones(p: PredictResponse | null): FeatureCollection {
  * Order: possible 2 h, possible 1 h, likely 2 h, likely 1 h, so the narrower zones draw on top.
  */
 export function aiZones(p: PredictResponse | null): FeatureCollection {
-  const features = (p?.ai?.zones as { features?: AiZoneFeature[] } | undefined)?.features ?? [];
+  const all = (p?.ai?.zones as { features?: AiZoneFeature[] } | undefined)?.features ?? [];
+  // D-18: when C is the model shown (p.model "C"), only its "likely" zones, so the map stays readable
+  const features = p?.model === "C" ? all.filter((f) => f.properties.confidence === "likely") : all;
   const rank = (f: AiZoneFeature) => (f.properties.confidence === "likely" ? 2 : 0) + (f.properties.horizon_min === 60 ? 1 : 0);
   return {
     type: "FeatureCollection",

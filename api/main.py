@@ -128,6 +128,11 @@ async def predict(req: PredictRequest):
     villages = impact.villages_at_risk(lat, lon, grid, cfg)
     ai = ai_layer.lookup(fire_id, time, cfg)            # model C's advice on replays (#52); never creates flags
     ai_layer.annotate(villages, ai, cfg)               # ai_minutes_left + ai_opinion (#58) on each village
+    if cfg.get("display", {}).get("model") == "C" and req.model in ("auto", "C"):
+        if ai is not None:                              # D-18: C's villages, times and flags replace B's
+            villages, model, reason = ai_layer.c_villages(villages, cfg), "C", None
+        elif model != "C":
+            reason = reason or "model C has no answer for this fire (live or demo fire): showing B"
     FIRES[fire_id] = {"lat": lat, "lon": lon, "grid": grid, "time": time, "data_age_min": age,
                       "villages": villages}
     store.apply_rules(fire_id, villages, time, age)

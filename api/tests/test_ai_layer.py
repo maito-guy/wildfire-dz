@@ -27,7 +27,8 @@ def fake_layer(path):
 @pytest.fixture
 def client(tmp_path, monkeypatch):
     cfg = load_config()
-    fake = {**cfg, "paths": {**cfg["paths"], "replay_ai": str(tmp_path / "replay_ai.parquet")}}
+    fake = {**cfg, "paths": {**cfg["paths"], "replay_ai": str(tmp_path / "replay_ai.parquet")},
+            "ai_layer": {**cfg["ai_layer"], "village_level": "possible"}}   # advice-mode tests: possible level
     monkeypatch.setattr(main, "load_config", lambda: fake)
     c = TestClient(main.app)
     c.post("/reset")
@@ -130,3 +131,58 @@ def test_c_ranks_b_flags_and_keeps_every_one(client):
     assert keys == sorted(keys)                                           # opinion first, then B's minutes
     v = c.get("/villages/at-risk", params={"fire_id": "kabylie_2021"}).json()["villages"]
     assert all(x["ai_opinion"] in rank for x in v)                        # C answered: every village has an opinion
+# ---------- display.model C (D-18): C's villages, times and flags replace B's when C has an answer ----------
+
+@pytest.fixture
+def client_c(tmp_path, monkeypatch):
+    cfg = load_config()
+    fake = {**cfg, "paths": {**cfg["paths"], "replay_ai": str(tmp_path / "replay_ai.parquet")},
+            "display": {"model": "C"}, "ai_layer": {**cfg["ai_layer"], "village_level": "likely", "village_max_min": 120}}
+    monkeypatch.setattr(main, "load_config", lambda: fake)
+    c = TestClient(main.app)
+    c.post("/reset")
+    yield c, tmp_path
+    c.post("/reset")
+
+
+def predict_auto(c, fire_id, time):
+    return c.post("/predict", json={"fire_id": fire_id, "time": time.isoformat(), "model": "auto",
+                                    "wind": {"speed_kmh": 20, "from_deg": 270},
+                                    "burning": [{"lat": LAT, "lon": LON}]}).json()
+
+
+def test_display_c_replaces_b_villages_and_flags(client_c):
+    c, tmp = client_c
+    p0 = predict(c, "kabylie_2021", T)                              # explicit B: B's villages, no C file yet
+    b_ids = {v["id"] for v in c.get("/villages/at-risk", params={"fire_id": "kabylie_2021"}).json()["villages"]}
+    c.post("/reset")
+    fake_layer(tmp / "replay_ai.parquet")
+    p = predict_auto(c, "kabylie_2021", T)
+    assert p0["model"] == "B" and p["model"] == "C" and p["fallback_reason"] is None and p["ai"]
+    v = c.get("/villages/at-risk", params={"fire_id": "kabylie_2021"}).json()["villages"]
+    assert v and {x["id"] for x in v} <= b_ids                      # only villages C reaches (likely, near the fire)
+    assert all(x["model"] == "C" and x["minutes_left"] == x["ai_minutes_left"] == 45 for x in v)
+    assert all(x["status"] == "leave_now" and "b_minutes_left" in x for x in v)
+    flags = c.get("/alerts", params={"status": "pending"}).json()
+    assert flags and all(a["model"] == "C" and a["minutes_left"] == 45 for a in flags)
+    assert {a["village_id"] for a in flags} == {x["id"] for x in v}
+
+
+def test_display_c_falls_back_to_b_without_an_answer(client_c):
+    c, tmp = client_c
+    fake_layer(tmp / "replay_ai.parquet")
+    p = predict_auto(c, "fire_live_1", T)                           # not a replay: C has no answer
+    assert p["model"] == "B" and "model C has no answer" in p["fallback_reason"] and p["ai"] is None
+    v = c.get("/villages/at-risk", params={"fire_id": "fire_live_1"}).json()["villages"]
+    assert all(x["model"] == "B" for x in v)
+
+
+def test_display_c_drops_villages_beyond_two_hours(client_c):
+    c, tmp = client_c
+    fake_layer(tmp / "replay_ai.parquet")
+    d = pd.read_parquet(tmp / "replay_ai.parquet")
+    d["likely_min"] = np.where(d.likely_min.notna(), 180.0, np.nan)   # C: likely only after 3 h
+    d.to_parquet(tmp / "replay_ai.parquet")
+    predict_auto(c, "kabylie_2021", T)
+    assert c.get("/villages/at-risk", params={"fire_id": "kabylie_2021"}).json()["villages"] == []
+    assert c.get("/alerts", params={"status": "pending"}).json() == []

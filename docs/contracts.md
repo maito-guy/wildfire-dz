@@ -50,6 +50,14 @@ and a message in the team chat naming who is affected. Everything is WGS84 lat/l
   the client fell more than `api.events_queue_size` events behind (new `config.yaml` key, was a fixed 100 that dropped
   flags silently), its missed events were dropped, and it must refetch `GET /alerts`. Additive. Affected: dashboard (#59).
 
+- **v0.10 (D-18, demo: model C shown alone).** New `config.yaml → display.model` (`C` | `B`). With `C`, when C has an
+  answer (replays), `POST /predict` returns `model: "C"` and the villages, their status and the pending flags come from
+  C's `likely` level (`ai_layer.village_level`) within 2 h (`ai_layer.village_max_min`) instead of B's. Villages C
+  does not reach are left out. Without a C answer (live fires, the Demo button's fire) B is used and
+  `fallback_reason` says so. `Village` gains optional `b_minutes_left` and `model` (`B` | `C`); `Alert` gains `model`.
+  An explicit `"model": "B"` request keeps B. The dashboard draws only C's `likely` zones while C is shown and hides
+  B's zones, next-pass outlines and satellite dots (they can be turned back on in Layers). Affected: dashboard.
+
 ---
 
 ## 1. Data contract
@@ -168,8 +176,8 @@ Request:
   (Kabylie 2021, 1 h: likely flags 15 % of the cells around the fire and catches 93 % of burns; possible 46 % / 98 %;
   B 64 % / 98 %). `time` is the satellite pass C answered for. C used that pass's real (ERA5) wind, not the request's.
   C only sees cells within 6 km of the fire (data step 7).
-- `Village.ai_minutes_left` / `Alert.ai_minutes_left` *(optional, v0.6)*: C's arrival at the `possible` level from
-  its cell under the village; `null` = C has no cell there or the fire does not reach it within 2 h. Minutes come in
+- `Village.ai_minutes_left` / `Alert.ai_minutes_left` *(optional, v0.6)*: C's arrival at `ai_layer.village_level`
+  (`likely` since v0.10, `possible` before) from its cell under the village; `null` = C has no cell there or the fire does not reach it within 2 h. Minutes come in
   C's steps (20, 30, 45, 60, 75, 90, 105, 120), so 20 means "within 20 min".
 - `Village.ai_opinion` / `Alert.ai_opinion` *(optional, v0.9)*: C's opinion of the village for this pass, from its cell
   under the village (within 0.75 cell): `likely` = inside C's likely zone within 2 h (`status.get_ready_max_min`),

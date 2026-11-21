@@ -36,6 +36,8 @@ interface Props {
   onLayer: (k: LayerKey, v: boolean) => void;
   /** The current prediction has model C's zones (`PredictResponse.ai` is not null). */
   aiAvailable: boolean;
+  /** Model C is the model shown (display.model C, D-18): only its "likely" zones are drawn. */
+  cShown?: boolean;
   /** Today's risk answer, for the fire weather line under "Risk today". */
   risk: RiskResponse | undefined;
 }
@@ -51,7 +53,7 @@ function fireWeatherLine(risk: RiskResponse | undefined): { text: string; title:
   };
 }
 
-export function MapControls({ basemap, onBasemap, layers, onLayer, aiAvailable, risk }: Props) {
+export function MapControls({ basemap, onBasemap, layers, onLayer, aiAvailable, cShown, risk }: Props) {
   const [open, setOpen] = useState(false);
   const weather = fireWeatherLine(risk);
   return (
@@ -101,7 +103,7 @@ export function MapControls({ basemap, onBasemap, layers, onLayer, aiAvailable, 
                   <span className={cn("block", off && "text-muted-foreground")}>{g.label}</span>
                   {isAi && (
                     <span className="block font-mono text-[10px] text-muted-foreground">
-                      {off ? "no AI estimate for this fire" : "solid likely · dashed possible"}
+                      {off ? "no AI estimate for this fire" : cShown ? "likely: dark ≤ 1 h · light ≤ 2 h" : "solid likely · dashed possible"}
                     </span>
                   )}
                   {isRisk && weather && (
