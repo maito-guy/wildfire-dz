@@ -17,6 +17,9 @@ Metrics: recall = share of burned cells inside the zone (catching); zone = flagg
 cell (false alarms; lower is better at equal recall); zone95 = zone size when each model is cut to
 catch exactly 95 % on that slice (fair ranking comparison); auc = ranking quality.
 
+Villages: for each named event, A / B / C of the event's year are replayed pass by pass over every
+cell around it (data steps 6 and 7 with --events), as evaluate.py does for the holdouts.
+
   python -m model.crossval        # writes model/artifacts/crossval.json (~10-20 min)
 """
 from __future__ import annotations
@@ -31,7 +34,7 @@ import pandas as pd
 import pyarrow.parquet as pq
 
 from core.config import load_config, repo_path
-from model import baselines
+from model import baselines, villages
 from model.ensemble import ModelC
 from model.evaluate import cell_metrics, matched_recall, short_only, time_threshold
 from model.features import check_columns, feature_columns, to_matrix
@@ -134,7 +137,7 @@ def crossval(cfg: dict) -> dict:
     df["cv_year"] = fire_year(df, cfg)
     years = sorted(df.cv_year.unique())
     rng = np.random.default_rng(cfg["model"]["seed"])
-    pooled, fold_info = [], []
+    pooled, fold_info, vill = [], [], {}
     for y in years:
         t0 = time.time()
         test = df[df.cv_year == y]
@@ -145,7 +148,8 @@ def crossval(cfg: dict) -> dict:
 
         fit_dza = short_only(rest, cfg)
         rate_dza = baselines.tune_rate(fit_dza, "B", cfg)
-        rate_all = baselines.tune_rate(pd.concat([fit_dza[fit_dza[c["label"]] == 1], other]), "B", cfg)
+        pos_all = pd.concat([fit_dza[fit_dza[c["label"]] == 1], other])
+        rate_all = baselines.tune_rate(pos_all, "B", cfg)
 
         model = train_c(tr, va, raw, cfg, int(cv.get("n_seeds", 1)))
         thr = time_threshold(model, va[va[c["label"]] == 1], cfg)
@@ -159,6 +163,13 @@ def crossval(cfg: dict) -> dict:
         p = model.predict_rows(test, cfg)
         out["score_C"], out["flag_C"] = p, p >= thr
         pooled.append(out)
+
+        # villages: the named events of this year, scored by this fold's models (never saw year y)
+        keys = {k for k, ev in cv.get("events", {}).items() if pd.Timestamp(ev["start"]).year == y}
+        if keys:
+            th = {"A": {"rate_m_per_min": baselines.tune_rate(pos_all, "A", cfg)},
+                  "B": {"rate_m_per_min": rate_all}, "C_cv": {"prob": thr, "prob_time": thr}}
+            vill.update(villages.evaluate_villages(cfg, th, {"cv": model}, "events_replay", "events_dense", keys))
         fold_info.append({"year": int(y), "test_fires": int(test[c["fire_id"]].nunique()),
                           "train_fires": int(tr[c["fire_id"]].nunique()), "rate_B_all": round(rate_all, 1),
                           "rate_B_dza": round(rate_dza, 1), "c_threshold": thr,
@@ -182,6 +193,7 @@ def crossval(cfg: dict) -> dict:
         ids = fires_in(d, cfg, ev)
         report["by_event"][key] = ({"name": ev["name"]} | slice_metrics(d[d[c["fire_id"]].isin(ids)], cfg)
                                    if ids else {"name": ev["name"], "status": "no fires matched: check bbox/dates"})
+        report["by_event"][key]["villages"] = vill.get(key, {"status": "not measured: run data steps 6 and 7 --events"})
     art = repo_path(cfg["paths"]["artifacts"])
     (art / "crossval.json").write_text(json.dumps(report, indent=2))
     return report

@@ -6,6 +6,11 @@ out/places.parquet         id, name, lat, lon, name_ar   (OSM settlements from t
 out/replay_passes.parquet  holdout, t, lat, lon, satellite, frp   (one row per burning cell per pass,
                            cleaned detections from step 2 inside each holdout's bbox and dates)
 Holdouts (bbox, start, end) are read from the repo's config.yaml.
+
+    python 06_places_replay.py --events
+
+out/events_replay.parquet  same schema, for config.yaml -> crossval.events (scored by model/crossval.py
+                           with the model of each event's year; the API and evaluate.py never read it)
 """
 import argparse
 from pathlib import Path
@@ -42,9 +47,16 @@ def replay(holdouts):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--export-dir", required=True, help="folder with the export's places.csv")
+    ap.add_argument("--export-dir", help="folder with the export's places.csv")
+    ap.add_argument("--events", action="store_true", help="only out/events_replay.parquet for crossval.events")
     a = ap.parse_args()
-    holdouts = yaml.safe_load(REPO_CONFIG.read_text())["holdouts"]
+    cfg = yaml.safe_load(REPO_CONFIG.read_text())
+    if a.events:
+        replay(cfg["crossval"]["events"]).to_parquet(C.OUT / "events_replay.parquet", index=False)
+        return
+    if not a.export_dir:
+        ap.error("--export-dir is required (or use --events)")
+    holdouts = cfg["holdouts"]
     pl = places(a.export_dir)
     pl.to_parquet(C.OUT / "places.parquet", index=False)
     print(f"places: {len(pl):,}")

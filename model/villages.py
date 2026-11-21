@@ -193,17 +193,23 @@ def score(pred: pd.DataFrame, pl: pd.DataFrame, cfg: dict) -> dict:
     }
 
 
-def evaluate_villages(cfg: dict, thresholds: dict, boosters: dict) -> dict:
-    """{holdout: {model: metrics}} or {} if the replay/places files are missing."""
-    rp_path, pl_path = repo_path(cfg["paths"]["replay_passes"]), repo_path(cfg["paths"]["places"])
+def evaluate_villages(cfg: dict, thresholds: dict, boosters: dict, replay_key: str = "replay_passes",
+                      dense_key: str = "holdout_dense", keys: set[str] | None = None) -> dict:
+    """{holdout: {model: metrics}} or {} if the replay/places files are missing.
+    replay_key / dense_key: entries of config paths (crossval.py passes events_replay / events_dense);
+    keys: score only these events (default: every one in the replay file)."""
+    rp_path, pl_path = repo_path(cfg["paths"][replay_key]), repo_path(cfg["paths"]["places"])
     if not (rp_path.exists() and pl_path.exists()):
         return {}
-    dense_path = repo_path(cfg["paths"].get("holdout_dense", "data/out/holdout_dense.parquet"))
-    dense_all = pd.read_parquet(dense_path) if dense_path.exists() else None
+    dense_path = repo_path(cfg["paths"].get(dense_key, f"data/out/{dense_key}.parquet"))
+    filters = [("holdout", "in", sorted(keys))] if keys else None
+    dense_all = pd.read_parquet(dense_path, filters=filters) if dense_path.exists() else None
     if dense_all is not None:
         dense_all["t1"] = pd.to_datetime(dense_all["t1"], utc=True)
     rp_all = pd.read_parquet(rp_path)
     rp_all["t"] = pd.to_datetime(rp_all["t"], utc=True)
+    if keys:
+        rp_all = rp_all[rp_all.holdout.isin(keys)]
     places = pd.read_parquet(pl_path)
     out = {}
     for key, rp in rp_all.groupby("holdout"):
