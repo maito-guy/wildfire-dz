@@ -12,9 +12,9 @@ entries short and factual. Use absolute dates (YYYY-MM-DD).
 ## 1. Current state
 
 - **Phase:** delivery (`RULES.md`, `PROJECT_MANAGEMENT_RULES.md` §9–13). Spec: `SPEC.md` v0.3.1.
-- **Running:** wave 4 agents on #53 (dashboard AI layer) and #17 (static terrain/fuel raster), worktrees `.claude/worktrees/{53,17}`. Data teammate's PRs merged 2026-11-21: #50 (2 h mean wind), #51 (firedata steps 1-7, model C crossval), #54 (model C advice layer, landed via #51). Closed #4 #6 #52; #5 open until the holdout bboxes are confirmed.
+- **Running:** nothing. Wave 4 done 2026-11-21: #53 merged (PR #55, closed; real Kabylie replay with `replay_ai.parquet` still to check on the laptop), #17 code merged (PR #56; issue open until the full `make static-raster` build is on Drive, owner: maito-guy). Data teammate's PRs merged 2026-11-21: #50 (2 h mean wind), #51 (firedata steps 1-7, model C crossval), #54 (model C advice layer, landed via #51). Closed #4 #6 #52; #5 open until the holdout bboxes are confirmed.
 - **Real data:** `make import-export` turns the Algeria Fire Map export (`data/algeria-fire-map-data/`, git-ignored) into detections, history, places, replay passes and the risk layer (D-15). `/detections /history /risk /replay` and `/health` answer `stub: false`/`real` on this machine.
-- **Next up:** #18 after #17; then #27 (needs #18) and #19/#20. #7 blocked only by #5 (bbox confirmation). #30 needs the GEE export and the 2002 dataset. #11 needs humans.
+- **Next up:** #18 (code can start against `core/static_raster.py`; formally blocked by #17 until the file is on Drive; see Q-05); then #27 (needs #18) and #19/#20. #7 blocked only by #5 (bbox confirmation). #30 needs the GEE export and the 2002 dataset. #11 needs humans.
 - **Blockers:** #5 bboxes TO CONFIRM; `model/artifacts/` (model C) lives on the Drive, not on this machine; run `make export` on the demo laptop (else B uses the 10 m/min placeholder); #8 #11 need humans (design, translations).
 
 ---
@@ -41,6 +41,8 @@ entries short and factual. Use absolute dates (YYYY-MM-DD).
 | C-17 | The dashboard polls `GET /health` every 5 s (10 s fetch timeout); unreachable is shown in words. `/health` and `/replay` are typed by hand in `src/api/client.ts` (no `response_model`). The alert log time is the last status change; sent and cancelled rows link to `cap.xml` | #41 |
 | C-18 | Docker: `make docker-up` (= `docker compose up -d --build`) serves everything on `${PORT:-8000}`. `.env` read at runtime; `data/out` and `model/artifacts` mounted read-only, so new files need `docker compose restart`, not a rebuild. CI job `docker` builds the image | #40 |
 | C-13 | `/predict` wind: request → Open-Meteo forecast (within `forecast.past_days` = 10 days) → ERA5 archive (older) → `weather_default`. Vector mean of the nearest hour and the next `forecast.mean_hours` (2), like the training feature `wind_speed_2h`. Cached per (lat, lon, hour) for 15 min; failures are not cached | #35 |
+| C-19 | Terrain and fuel for any cell come from `core/static_raster.py` (`load`/`lookup`/`lookup_many`, `train.parquet` column names) reading `paths.static_raster` (`data/out/static_375m.npz`), built by `make static-raster` (resumable, `--shard i/4`, ~25 min whole bbox). One fire-style grid over `config.yaml → static_raster.bbox`. Only a 404 tile is sea. `rasterio` + `requests` are dev dependencies | #56 |
+| C-20 | Model C's advice is violet (`mapColors.ai`/`aiOnDark`, CSS `--ai`): solid = likely, dashed = possible, 1 h thicker than 2 h. One toggle in the Layers card, disabled when `ai` is null. Times read "B: … · AI: …" (`fmtBothTimes`/`bothTimesParts` in `format.ts`) | #55 |
 
 ---
 
@@ -74,6 +76,7 @@ entries short and factual. Use absolute dates (YYYY-MM-DD).
 | Q-02 | Export licence OK for a public repo? | Commerce checks before the pitch | 2026-11-20 |
 | Q-03 | Darija and Kabyle script | Darija in Arabic script (RTL), Kabyle in Latin script | 2026-11-20 |
 | Q-04 | "Plantable" definition from the Earth Engine layers; format of the 2002 dataset | Decided in #30 | 2026-11-20 |
+| Q-05 | Should #18 take the training rows' terrain/fuel from the static raster too? Per-fire training grids sit up to half a cell off the raster, so steep-terrain values differ (corr 0.98–0.99) | Yes: retrain on raster values so training matches prediction time | 2026-11-21 |
 
 ---
 
@@ -123,3 +126,5 @@ _None yet._
 - CI runs on `pull_request` (any base) and on push to `main` only, not on push to `dev`.
 - `scripts/merge-pr.sh` needs `gh pr update-branch`, which gh 2.45 lacks. Manual sequence: check the PR is based on the latest `origin/dev` (else merge `origin/dev` into the branch and push), wait for the `ci` run on the head SHA (`gh run list --workflow ci --commit <sha>`, then `gh run watch`), then `gh pr merge <n> --squash --subject "<title> (#<n>)" --body ""`.
 - `Closes #N` does not auto-close issues on merges into `dev` (not the default branch). Close them by hand with a comment linking the PR.
+- Headless UI check: `/usr/bin/google-chrome` + `playwright-core` installed in a scratch folder; use `waitUntil: 'load'` (the SSE stream keeps 'networkidle' from firing).
+- GitHub runs no `pull_request` CI while a PR has merge conflicts: resolve first, then wait for the run on the new head SHA.
