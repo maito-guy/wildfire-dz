@@ -26,6 +26,7 @@ import pandas as pd
 from core.config import load_config, repo_path
 from model import ensemble, villages
 from model.evaluate import time_threshold, va_all_pos
+from model.features import table_for
 
 
 def thresholds(model, cfg: dict) -> dict[str, float]:
@@ -33,7 +34,7 @@ def thresholds(model, cfg: dict) -> dict[str, float]:
     c = cfg["columns"]
     countries = model.meta.get("countries")
     countries = None if countries in (None, "all") else countries
-    path = repo_path(cfg["paths"]["train_table"])
+    path = repo_path(model.meta.get("table") or table_for(cfg, model.meta.get("tag")))
     df = pd.read_parquet(path, filters=[(c["country"], "in", countries)] if countries else None)
     ai = cfg["ai_layer"]
     likely, possible = time_threshold(model, va_all_pos(df, cfg, countries), cfg,

@@ -39,6 +39,7 @@ def make_cfg(tmp_path):
     table = tmp_path / "train.parquet"
     synthetic_table().to_parquet(table)
     cfg["paths"]["train_table"] = str(table)
+    cfg["paths"]["train_table_dza"] = str(table)          # C_dza reads its own table (#18)
     cfg["paths"]["artifacts"] = str(tmp_path / "artifacts")
     for k in ("replay_passes", "places", "holdout_dense"):   # never read the real data/out files
         cfg["paths"][k] = str(tmp_path / f"missing_{k}.parquet")
