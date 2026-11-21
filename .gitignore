@@ -46,3 +46,6 @@ dashboard/dist/
 # npm workspaces + Turborepo (root)
 /node_modules/
 .turbo/
+
+# local runs and quarantined downloads
+data/cache_static_bad/
