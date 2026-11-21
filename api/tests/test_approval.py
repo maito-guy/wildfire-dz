@@ -228,3 +228,58 @@ def test_flag_helper_preventive_risk():
     assert a["status"] == "pending" and a["level"] == "preventive" and a["source"] == "ai_risk"
     assert a["texts"]["en"].startswith("High fire risk today around Village X.")
     assert s.flag("risk_2026-11-20", village("safe", None), "preventive", "ai_risk", T, 0) is a
+
+
+# ---- C's opinion orders the queue, and no flag is lost on /events (#58) -------------------------
+
+def test_flag_update_copies_ai_opinion():
+    s = AlertStore()
+    q = _events(s)
+    s.apply_rules("f", [village("get_ready", 90) | {"ai_opinion": "possible"}], T, 0)
+    s.apply_rules("f", [village("get_ready", 90) | {"ai_opinion": "likely"}], T, 0)    # only C changed its mind
+    a = next(iter(s.alerts.values()))
+    assert a["ai_opinion"] == "likely"
+    assert [e for e, _, _ in drain(q)] == ["flag", "flag_updated"]
+
+
+def test_pending_order_opinion_then_minutes():
+    from api.alerts import pending_order
+    rows = [{"ai_opinion": None, "minutes_left": 10}, {"ai_opinion": "unlikely", "minutes_left": 20},
+            {"ai_opinion": "likely", "minutes_left": 90}, {"ai_opinion": "possible", "minutes_left": None},
+            {"ai_opinion": "possible", "minutes_left": 30}, {"ai_opinion": "likely", "minutes_left": 40}]
+    got = [(r["ai_opinion"], r["minutes_left"]) for r in sorted(rows, key=pending_order)]
+    assert got == [("likely", 40), ("likely", 90), ("possible", 30), ("possible", None), ("unlikely", 20),
+                   (None, 10)]
+
+
+def test_200_flags_from_one_predict_all_reach_events():
+    s = AlertStore()
+    q = _events(s)
+    s.apply_rules("f", [village("get_ready", 90, f"v{i}") for i in range(200)], T, 0)
+    events = drain(q)
+    assert len(events) == 200 and {e for e, _, _ in events} == {"flag"}
+
+
+def _raw(q) -> list[str]:
+    out = []
+    while not q.empty():
+        out.append(q.get_nowait().split("\n", 1)[0].removeprefix("event: "))
+    return out
+
+
+def test_dashboard_far_behind_gets_resync(monkeypatch, caplog):
+    import api.alerts as alerts_mod
+    cfg = alerts_mod.load_config()
+    monkeypatch.setattr(alerts_mod, "load_config", lambda: {**cfg, "api": {**cfg["api"], "events_queue_size": 10}})
+    s = AlertStore()
+    dash, phone = s.events.subscribe(), s.broker.subscribe()
+    with caplog.at_level("WARNING", logger="api.alerts"):
+        flags = s.apply_rules("f", [village("get_ready", 90, f"v{i}") for i in range(25)], T, 0)
+        for a in flags[:12]:
+            s.approve(a["id"])                                   # 12 sent alerts for a phone with room for 10
+    got = _raw(dash)
+    assert got[0] == "resync" and len(got) <= 10                 # the dashboard refetches /alerts instead
+    assert "resync" not in _raw(phone)                           # phones never get resync, only a logged drop
+    assert any("resync sent" in r.message for r in caplog.records)
+    assert any("alerts/stream" in r.message and "dropped" in r.message for r in caplog.records)
+    assert len(s.alerts) == 25                                   # the flags themselves are all in the store

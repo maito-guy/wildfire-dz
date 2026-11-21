@@ -5,7 +5,9 @@ holdout fires by `python -m model.replay_ai` (paths.replay_ai); this module only
   - `/predict` for a replay (fire_id = holdout key, time within ai_layer.match_min of a precomputed pass)
     gets an `ai` block: "likely" and "possible" 1 h / 2 h zones (GeoJSON, like B's `zones`)
   - each village within one cell of C's cells gets `ai_minutes_left` (C's possible-level arrival)
-Anything else (live fires, no file, a pass C did not cover) gives ai = None and ai_minutes_left = None.
+  - every village of a pass C answered gets `ai_opinion` (#58): "likely" (inside C's likely zone within 2 h),
+    "possible" (inside the possible zone only) or "unlikely" (outside both). The approval queue is ordered by it.
+Anything else (live fires, no file, a pass C did not cover) gives ai = None, ai_minutes_left = None, ai_opinion = None.
 C uses the real (ERA5) wind of that pass, not the wind sent in the request.
 """
 from __future__ import annotations
@@ -85,8 +87,9 @@ def lookup(fire_id: str | None, time, cfg: dict) -> dict | None:
             "zones": {"type": "FeatureCollection", "features": feats}, "cells": cells}
 
 
-def village_minutes(villages: list[dict], ai: dict | None, cfg: dict) -> dict[str, int | None]:
-    """Village id -> C's possible-level minutes from the nearest of C's cells, if within one cell; else None."""
+def village_minutes(villages: list[dict], ai: dict | None, cfg: dict) -> dict[str, dict[str, int | None]]:
+    """Village id -> {"possible": C's possible-level minutes, "likely": C's likely-level minutes} from the nearest of
+    C's cells, each None if that cell is further than one cell away or C's fire does not reach it."""
     if ai is None or not villages:
         return {}
     cells = ai["cells"]
@@ -94,13 +97,32 @@ def village_minutes(villages: list[dict], ai: dict | None, cfg: dict) -> dict[st
     cx, cy = geo.to_xy(cells["lat"].to_numpy(), cells["lon"].to_numpy(), lat0, lon0)
     vx, vy = geo.to_xy(np.array([v["lat"] for v in villages]), np.array([v["lon"] for v in villages]), lat0, lon0)
     reach = 0.75 * float(cfg["grid"]["cell_m"])          # inside the cell, with room for grids from several fires
-    minutes = cells["possible_min"].to_numpy()
+    cols = {"possible": cells["possible_min"].to_numpy(dtype=float), "likely": cells["likely_min"].to_numpy(dtype=float)}
     out = {}
     for i, v in enumerate(villages):
         d = np.hypot(np.asarray(cx) - vx[i], np.asarray(cy) - vy[i])
         j = int(np.argmin(d))
-        out[v["id"]] = int(round(minutes[j])) if d[j] <= reach and np.isfinite(minutes[j]) else None
+        out[v["id"]] = {k: int(round(m[j])) if d[j] <= reach and np.isfinite(m[j]) else None for k, m in cols.items()}
     return out
+
+
+def opinion(m: dict[str, int | None] | None, horizon_min: float) -> str:
+    """C's opinion of one village for a pass C answered: likely | possible | unlikely (never None here)."""
+    m = m or {}
+    for level in ("likely", "possible"):
+        if m.get(level) is not None and m[level] <= horizon_min:
+            return level
+    return "unlikely"
+
+
+def annotate(villages: list[dict], ai: dict | None, cfg: dict) -> None:
+    """Set `ai_minutes_left` and `ai_opinion` on each village in place (both None when C has no answer)."""
+    mins = village_minutes(villages, ai, cfg)
+    horizon = float(cfg["status"]["get_ready_max_min"])     # "within 2 h", like B's get_ready
+    for v in villages:
+        m = mins.get(v["id"])
+        v["ai_minutes_left"] = m["possible"] if m else None
+        v["ai_opinion"] = None if ai is None else opinion(m, horizon)
 
 
 def public(ai: dict | None) -> dict | None:

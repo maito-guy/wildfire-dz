@@ -17,7 +17,7 @@ from fastapi.staticfiles import StaticFiles
 
 from api import ai_layer, cap, detections, firms_live, impact, predictor, replay, weather
 from api import scoreboard as scoreboard_file
-from api.alerts import LANGS, Broker, store
+from api.alerts import LANGS, Broker, pending_order, store
 from api.schemas import (
     Alert,
     AlertApprove,
@@ -127,9 +127,7 @@ async def predict(req: PredictRequest):
     fire_id = req.fire_id or f"fire_{next(_fire_ids):03d}"
     villages = impact.villages_at_risk(lat, lon, grid, cfg)
     ai = ai_layer.lookup(fire_id, time, cfg)            # model C's advice on replays (#52); never creates flags
-    ai_min = ai_layer.village_minutes(villages, ai, cfg)
-    for v in villages:
-        v["ai_minutes_left"] = ai_min.get(v["id"])
+    ai_layer.annotate(villages, ai, cfg)               # ai_minutes_left + ai_opinion (#58) on each village
     FIRES[fire_id] = {"lat": lat, "lon": lon, "grid": grid, "time": time, "data_age_min": age,
                       "villages": villages}
     store.apply_rules(fire_id, villages, time, age)
@@ -161,8 +159,9 @@ async def villages_at_risk(fire_id: str | None = None):
 
 @app.get("/alerts", response_model=list[Alert])
 async def list_alerts(fire_id: str | None = None, status: AlertStatus | None = None):
-    return [a for a in store.alerts.values()
-            if (fire_id is None or a["fire_id"] == fire_id) and (status is None or a["status"] == status)]
+    out = [a for a in store.alerts.values()
+           if (fire_id is None or a["fire_id"] == fire_id) and (status is None or a["status"] == status)]
+    return sorted(out, key=pending_order) if status == "pending" else out   # queue: C's opinion, then B's minutes
 
 
 @app.post("/alerts", response_model=Alert, dependencies=[Depends(require_operator)])
@@ -228,7 +227,7 @@ async def stream(request: Request, village_id: str | None = None):
 
 @app.get("/events")
 async def events(request: Request):
-    """Dashboards: flag, flag_updated, alert_sent, alert_rejected, alert_cancelled."""
+    """Dashboards: flag, flag_updated, alert_sent, alert_rejected, alert_cancelled, resync (refetch /alerts)."""
     return _sse(request, store.events)
 
 

@@ -188,6 +188,8 @@ api:
   predict_timeout_s: 8                     # model C in /predict (weather + rows + boosters); longer -> B + fallback_reason
   model_c:                                 # model C in /predict (api/predictor.py, #20)
     mask_frp_mw: 10.0                      # PLACEHOLDER FRP per burning point: a mask carries no FRP
+  events_queue_size: 2000                  # SSE events kept per client (/events, /alerts/stream); one replay /predict
+                                           # makes ~170 flags. A dashboard further behind gets `resync` (#58)
 
 forecast:                                  # Open-Meteo wind for /predict when the request carries no wind (api/weather.py)
   forecast_url: https://api.open-meteo.com/v1/forecast
