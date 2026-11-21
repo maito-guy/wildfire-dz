@@ -1,0 +1,32 @@
+{
+  "_owner": "Commerce. English is the master. Other languages stay EMPTY until a native speaker has written and checked them. Never paste machine translation here unchecked.",
+  "_placeholders": "{village} {km} {direction} {minutes} {leave_toward} {phone}",
+  "civil_protection_phone": "[number, to confirm]",
+  "checked_by": {"ary": null, "kab": null, "ar": null, "fr": null, "en": "master"},
+  "language_names": {"ary": "Darija", "kab": "Taqbaylit", "ar": "العربية", "fr": "Français", "en": "English"},
+  "rtl": ["ary", "ar"],
+  "headline": {
+    "get_ready": {"en": "Emergency alert: wildfire", "fr": "", "ar": "", "ary": "", "kab": ""},
+    "leave_now": {"en": "Extreme alert: wildfire", "fr": "", "ar": "", "ary": "", "kab": ""},
+    "update": {"en": "Wildfire update", "fr": "", "ar": "", "ary": "", "kab": ""},
+    "preventive": {"en": "High fire risk today", "fr": "", "ar": "", "ary": "", "kab": ""}
+  },
+  "templates": {
+    "get_ready": {
+      "en": "{village}: wildfire about {km} km to the {direction}. It could reach you in about {minutes} minutes. Get ready to leave. Next update in 15 min.",
+      "fr": "", "ar": "", "ary": "", "kab": ""
+    },
+    "leave_now": {
+      "en": "{village}: LEAVE NOW toward the {leave_toward}. Fire expected in about {minutes} minutes. Take water, ID and medicine. Call Civil Protection: {phone}.",
+      "fr": "", "ar": "", "ary": "", "kab": ""
+    },
+    "update": {
+      "en": "{village}: the fire is no longer moving toward you. Stay alert; we will tell you if this changes.",
+      "fr": "", "ar": "", "ary": "", "kab": ""
+    },
+    "preventive": {
+      "en": "High fire risk today around {village}. Do not burn anything outdoors. Report smoke to Civil Protection: {phone}.",
+      "fr": "", "ar": "", "ary": "", "kab": ""
+    }
+  }
+}

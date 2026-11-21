@@ -1,0 +1,12 @@
+{
+  "name": "@wildfire/api",
+  "private": true,
+  "version": "0.1.0",
+  "description": "FastAPI backend. Scripts run the Python tools from the repo root and need .venv (make setup).",
+  "scripts": {
+    "dev": "cd .. && .venv/bin/python -m uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload",
+    "lint": "cd .. && .venv/bin/ruff check .",
+    "test": "cd .. && .venv/bin/python -m pytest -q",
+    "typecheck": "echo \"python: no type checker configured\""
+  }
+}

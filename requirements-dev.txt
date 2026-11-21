@@ -1,0 +1,7 @@
+-r requirements.txt
+pytest>=8
+httpx>=0.27
+ruff>=0.5
+lxml>=5                   # tests only: validate the CAP message against the OASIS CAP 1.2 XSD
+rasterio>=1.3             # data/build_static_raster.py + its tests (#17), same reader as data/firedata step 4
+requests>=2.31            # step 4 asks the tile server whether a missing tile is a 404 (sea)

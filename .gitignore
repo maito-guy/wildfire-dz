@@ -1,0 +1,56 @@
+# secrets
+.env
+*.key
+
+# data: never commit
+data/out/
+data/live/
+data/raw/
+data/algeria-fire-map-data/
+data/cache/
+data/cache_weather/
+data/cache_static/
+data/cache_static_raster/
+*.npz
+data/raw_firms/
+data/boundaries/
+data/baseline/
+data/*.log
+*.parquet
+*.csv
+*.tif
+*.tiff
+*.nc
+*.zip
+
+# model outputs (re-created by `make train evaluate export`; share via Drive, not git)
+model/artifacts/*
+!model/artifacts/.gitkeep
+
+# python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+
+# editors / OS
+.vscode/
+.idea/
+.DS_Store
+
+# AI workflow kit: parallel agent worktrees
+.claude/worktrees/
+
+# dashboard (npm)
+dashboard/node_modules/
+dashboard/dist/
+
+# npm workspaces + Turborepo (root)
+/node_modules/
+.turbo/
+
+# local runs and quarantined downloads
+data/runs/
+data/cache_static_bad/

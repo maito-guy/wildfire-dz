@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <link rel="icon" type="image/png" href="/dashboard/LogoSmallLight.png" />
+    <title>Hareeq · Civil Protection</title>
+    <script>
+      // Same rule as src/lib/theme.ts, run before the first paint so the page never flashes the wrong theme.
+      try {
+        var t = localStorage.getItem("hareeq.theme");
+        if (t === "dark" || (t !== "light" && matchMedia("(prefers-color-scheme: dark)").matches)) {
+          document.documentElement.classList.add("dark");
+        }
+      } catch (e) {}
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
