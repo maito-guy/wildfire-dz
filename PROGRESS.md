@@ -12,9 +12,10 @@ entries short and factual. Use absolute dates (YYYY-MM-DD).
 ## 1. Current state
 
 - **Phase:** delivery (`RULES.md`, `PROJECT_MANAGEMENT_RULES.md` §9–13). Spec: `SPEC.md` v0.3.1.
-- **Running:** nothing. Wave 4 done 2026-11-21: #53 merged (PR #55, closed; real Kabylie replay with `replay_ai.parquet` still to check on the laptop), #17 code merged (PR #56; issue open until the full `make static-raster` build is on Drive, owner: maito-guy). Data teammate's PRs merged 2026-11-21: #50 (2 h mean wind), #51 (firedata steps 1-7, model C crossval), #54 (model C advice layer, landed via #51). Closed #4 #6 #52; #5 open until the holdout bboxes are confirmed.
+- **Running:** wave 5 (2026-11-21): #58 (model C ranks pending flags + `/events` resync) and #20 (model C in `/predict`, coded against a test booster; real artifacts on the Drive). #59 waits on #58.
+- **Merged 2026-11-21:** #63 (place names, #62), #64 (live FIRMS every 30 min, #61), #65 (FWI cap on the risk layer, closed #57), #60 (shared feature builder `core/features.py`, closed #18; Q-05 answered yes, steps 5/7 take `--terrain raster`). #17 stays open until `static_375m.npz` is on the Drive.
 - **Real data:** `make import-export` turns the Algeria Fire Map export (`data/algeria-fire-map-data/`, git-ignored) into detections, history, places, replay passes and the risk layer (D-15). `/detections /history /risk /replay` and `/health` answer `stub: false`/`real` on this machine.
-- **Next up:** #18 (code can start against `core/static_raster.py`; formally blocked by #17 until the file is on Drive; see Q-05); then #27 (needs #18) and #19/#20. #7 blocked only by #5 (bbox confirmation). #30 needs the GEE export and the 2002 dataset. #11 needs humans.
+- **Next up:** #59 after #58; rebuild `train.parquet` with `--terrain raster` and retrain C (data teammate, local data); #27, #19. #7 blocked only by #5 (bbox confirmation). #30 needs the GEE export and the 2002 dataset. #11 needs humans.
 - **Blockers:** #5 bboxes TO CONFIRM; `model/artifacts/` (model C) lives on the Drive, not on this machine; run `make export` on the demo laptop (else B uses the 10 m/min placeholder); #8 #11 need humans (design, translations).
 
 ---
@@ -66,6 +67,7 @@ entries short and factual. Use absolute dates (YYYY-MM-DD).
 | D-13 | 2026-11-20 | Dashboard UI follows DESIGN1 (light: paper/ink/fire, status words) + DESIGN2 (dark glass, map full-bleed, floating panels). Light/dark toggle (kept in the browser), map view Heatmap / 3D (Esri satellite imagery on terrain, tilted) / Normal (OpenFreeMap Liberty street map, both themes). Alert Log hidden from the Villages tab. Brand is "Hareeq" with the logos in `dashboard/public/`. Each fact has one home in the UI: receivers + data age in the status pill, connection problems in the top banners, layer toggles in the Layers card only, pending count on the Approval tab | Owner |
 | D-14 | 2026-11-21 | Model C is advice next to B, not an alert maker: B creates every pending flag, C shows likely/possible zones and `ai_minutes_left`. Cross-validation (all Algerian fires): C better per cell (AUC 0.956 vs 0.896) but not yet per village, so B serves alerts | Owner, #51 #54 |
 | D-15 | 2026-11-21 | The dashboard uses the Algeria Fire Map export instead of the stubs (`data/firedata/import_export.py`, `make import-export`). Until #27, `risk_today.parquet` is the export's `cell_risk.csv` (0.1° cells split onto the 0.05° display lattice; classes very-low/low→low, very-high/extreme→very_high; `top_factors` from the export's land cover, slope and fire history, not from a model) | Owner request |
+| D-16 | 2026-11-21 | Q-05: model C trains on the static raster's terrain/fuel (`--terrain raster`), so training matches prediction time | #60 |
 | D-09 | 2026-11-20 | If `OPERATOR_TOKEN` is unset, write endpoints stay open and log a warning (dev mode). If it is set, the header is required (401 otherwise). The demo sets it | Wave 1 seam, coordinator default |
 
 ### 3.2 Open (waiting on the owner)
@@ -76,7 +78,6 @@ entries short and factual. Use absolute dates (YYYY-MM-DD).
 | Q-02 | Export licence OK for a public repo? | Commerce checks before the pitch | 2026-11-20 |
 | Q-03 | Darija and Kabyle script | Darija in Arabic script (RTL), Kabyle in Latin script | 2026-11-20 |
 | Q-04 | "Plantable" definition from the Earth Engine layers; format of the 2002 dataset | Decided in #30 | 2026-11-20 |
-| Q-05 | Should #18 take the training rows' terrain/fuel from the static raster too? Per-fire training grids sit up to half a cell off the raster, so steep-terrain values differ (corr 0.98–0.99) | Yes: retrain on raster values so training matches prediction time | 2026-11-21 |
 
 ---
 
@@ -91,6 +92,7 @@ entries short and factual. Use absolute dates (YYYY-MM-DD).
 
 ## 5. Milestone log
 
+- 2026-11-21: Merged #63 #64 #65 #60; closed #18 #57. Wave 5 started (#58, #20).
 - 2026-11-20: Wave 2 complete: #10 phone page (PR #43), #25 approval queue (PR #44), #40 Docker (PR #45) merged.
 - 2026-11-20: Wave 2: #15 status bar (PR #41) and #39 Turborepo (PR #42) merged; #25 and #10 started without mockups (D-11); #40 Docker started.
 - 2026-11-20: Wave 1 done: #26 CAP (PR #37) and #32 React dashboard (PR #38) merged. Created #39 Turborepo and #40 Docker (owner request).
