@@ -1,5 +1,5 @@
 # One command for the whole demo: `docker compose up -d --build` (or `make docker-up`).
-# Data and model artifacts are mounted read-only: drop new files in, then `docker compose restart` (no rebuild).
+# Data and model artifacts are mounted read-only (the live FIRMS file, #61, lives in the named volume firms_live): drop new files in, then `docker compose restart` (no rebuild).
 services:
   api:
     build: .
@@ -12,4 +12,8 @@ services:
     volumes:
       - ./data/out:/app/data/out:ro
       - ./model/artifacts:/app/model/artifacts:ro
+      - firms_live:/app/data/live           # written by the live FIRMS loop (#61); a named volume, so the app user owns it
     restart: unless-stopped
+
+volumes:
+  firms_live:
