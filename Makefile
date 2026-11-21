@@ -7,7 +7,7 @@ PORT ?= 8000
 EXPORT ?= $(HOME)/Downloads/algeria-fire-map-data/detections.csv
 EXPORT_DIR ?= data/algeria-fire-map-data
 
-.PHONY: help setup dev api dashboard-dev dashboard-build test lint fmt check-columns train train-dza train-dza-nowind evaluate crossval replay-ai export model data import-export static-raster firms-live lan-ip demo-check docker-up docker-down docker-logs
+.PHONY: help setup dev api dashboard-dev dashboard-build test lint fmt check-columns train train-dza train-dza-nowind evaluate crossval replay-ai export model data import-export table-dza static-raster firms-live lan-ip demo-check docker-up docker-down docker-logs
 
 help:            ## list targets
 	@grep -E '^[a-z-]+:.*##' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-14s %s\n", $$1, $$2}'
@@ -73,6 +73,11 @@ data:            ## run the firedata pipeline (laptop only; see data/README.md)
 
 import-export:   ## real data for the API from the Algeria Fire Map export (EXPORT_DIR=...)
 	cd data/firedata && FIREDATA_DIR=.. ../../$(PY) import_export.py --export-dir $(abspath $(EXPORT_DIR))
+
+table-dza:       ## C_dza's table + step 7 with the raster's terrain (#18; needs static-raster and steps 1-3)
+	cd data/firedata && FIREDATA_DIR=.. ../../$(PY) 05_build_table.py --countries DZA --terrain raster --out ../out/train_dza_raster.parquet \
+	  && FIREDATA_DIR=.. ../../$(PY) 07_holdout_dense.py --terrain raster \
+	  && FIREDATA_DIR=.. ../../$(PY) 07_holdout_dense.py --events --terrain raster
 
 static-raster:   ## terrain + fuel at 375 m for northern Algeria -> data/out/static_375m.npz (#17; resumable, network)
 	$(PY) data/build_static_raster.py

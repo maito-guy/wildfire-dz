@@ -9,6 +9,7 @@ paths:
   detections: data/out/detections.parquet  # VIIRS detections for the fire map (#29); falls back to stub detections
   detections_live: data/live/firms_live.parquet  # newest FIRMS NRT detections (api/firms_live.py, #61); merged with `detections`
   history_grid: data/out/history_grid.parquet  # pre-aggregated fire history (#29); else built from detections, else stub
+  train_table_dza: data/out/train_dza_raster.parquet  # model C_dza: Algerian fires, terrain from the raster (`make table-dza`)
   holdout_dense: data/out/holdout_dense.parquet  # every cell around the holdout fires (data step 7), to score C on villages
   events_replay: data/out/events_replay.parquet  # same, for crossval.events (step 6 --events); only crossval.py reads them
   events_dense: data/out/events_dense.parquet    # (step 7 --events)

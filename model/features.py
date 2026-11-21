@@ -16,6 +16,14 @@ def load_table(cfg: dict, path: str | None = None) -> pd.DataFrame:
     return df
 
 
+def table_for(cfg: dict, tag: str | None = None) -> str:
+    """The training table for a model tag: config.yaml paths.train_table_<tag> if set, else paths.train_table.
+    C_dza trains on train_table_dza: Algerian fires with the national raster's terrain (#18), which also keeps
+    the fires whose step 4 terrain could not be fetched."""
+    base = (tag or "").removesuffix("_nowind")
+    return cfg["paths"].get(f"train_table_{base}") or cfg["paths"]["train_table"]
+
+
 def check_columns(df: pd.DataFrame, cfg: dict) -> None:
     c = cfg["columns"]
     needed = [v for k, v in c.items() if k != "id_like"]

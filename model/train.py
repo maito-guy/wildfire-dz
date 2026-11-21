@@ -12,7 +12,7 @@ import lightgbm as lgb
 
 from core.config import load_config, repo_path
 from model.ensemble import ModelC
-from model.features import feature_columns, load_table, split, to_matrix
+from model.features import feature_columns, load_table, split, table_for, to_matrix
 from model.wind import WIND_FEATURES
 
 
@@ -29,7 +29,7 @@ def fit_boosters(Xtr, ytr, wtr, Xva, yva, wva, cfg: dict, n_seeds: int) -> list[
 
 def train(cfg: dict, countries: list[str] | None = None, tag: str = "mixed", table: str | None = None,
           no_wind: bool = False):
-    df = load_table(cfg, table)
+    df = load_table(cfg, table or table_for(cfg, tag))
     tr, va, _ = split(df, cfg, countries)
     c = cfg["columns"]
     raw = feature_columns(df, cfg)
@@ -52,7 +52,7 @@ def train(cfg: dict, countries: list[str] | None = None, tag: str = "mixed", tab
     top = sorted(zip(Xtr.columns, gain), key=lambda x: -x[1])[:10]
     meta = {"tag": tag, "countries": countries or "all", "no_wind": no_wind, "files": files,
             "raw_features": raw, "features": list(Xtr.columns),
-            "n_train_rows": int(len(tr)), "n_val_rows": int(len(va)),
+            "table": str(table or table_for(cfg, tag)), "n_train_rows": int(len(tr)), "n_val_rows": int(len(va)),
             "n_train_fires": int(tr[c["fire_id"]].nunique()), "n_val_fires": int(va[c["fire_id"]].nunique()),
             "train_countries": tr[c["country"]].value_counts().to_dict(),
             "best_iterations": [int(b.best_iteration or b.current_iteration()) for b in boosters],
