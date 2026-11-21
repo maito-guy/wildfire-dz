@@ -6,7 +6,7 @@ PY ?= .venv/bin/python
 PORT ?= 8000
 EXPORT ?= $(HOME)/Downloads/algeria-fire-map-data/detections.csv
 
-.PHONY: help setup dev api dashboard-dev dashboard-build test lint fmt check-columns train train-dza train-dza-nowind evaluate crossval export model data lan-ip demo-check docker-up docker-down docker-logs
+.PHONY: help setup dev api dashboard-dev dashboard-build test lint fmt check-columns train train-dza train-dza-nowind evaluate crossval replay-ai export model data lan-ip demo-check docker-up docker-down docker-logs
 
 help:            ## list targets
 	@grep -E '^[a-z-]+:.*##' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-14s %s\n", $$1, $$2}'
@@ -57,10 +57,13 @@ evaluate:        ## thresholds + scoreboard on held-out fires
 crossval:        ## every Algerian year tested once (B tuned on all vs DZA, and C)
 	$(PY) -m model.crossval
 
+replay-ai:       ## model C's advice on the replays (#52): zones + times next to B, never alerts
+	$(PY) -m model.replay_ai
+
 export:          ## publish artifacts for the API (TAG=mixed to ship C)
 	$(PY) -m model.export $(if $(TAG),--tag $(TAG),)
 
-model: train train-dza train-dza-nowind evaluate crossval   ## full model loop
+model: train train-dza train-dza-nowind evaluate crossval replay-ai   ## full model loop
 
 data:            ## run the firedata pipeline (laptop only; see data/README.md)
 	cd data/firedata && export FIREDATA_DIR=.. && ../../$(PY) 01_download_firms.py \
