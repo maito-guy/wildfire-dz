@@ -3,7 +3,7 @@
 import { Siren, XCircle } from "@phosphor-icons/react";
 import { useState } from "react";
 import type { Alert, Village } from "../api/client";
-import { fmtClock, lastChangeAt, statusWord } from "../format";
+import { BOTH_TIMES_TITLE, bothTimesParts, fmtClock, lastChangeAt, statusWord } from "../format";
 import { StatusBadge } from "./status-badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -37,8 +37,8 @@ interface Props {
 
 function metaLine(v: Village, sent: Alert | undefined): string {
   const parts = [`${v.distance_km.toFixed(1)} km`];
-  if (v.status === "safe") parts.push(v.minutes_left == null ? "no zone in reach" : `${v.minutes_left} min`);
-  else parts.push(`leave → ${v.leave_toward}`);
+  // B's minutes are on the "B: … · AI: …" line below, so only the way out goes here.
+  if (v.status !== "safe") parts.push(`leave → ${v.leave_toward}`);
   if (sent) parts.push(`${statusWord(sent.level).toLowerCase()} sent ${fmtClock(lastChangeAt(sent))}`);
   return parts.join(" · ");
 }
@@ -139,6 +139,13 @@ export function VillageList({ villages, alerts, busy, onSend, onCancel, onFocus 
                     <span className="block truncate text-[15px] font-semibold">{v.name}</span>
                     <span className="block truncate font-mono text-[11.5px] text-muted-foreground tabular-nums">
                       {metaLine(v, sent)}
+                    </span>
+                    <span className="flex flex-wrap gap-x-1 font-mono text-[11.5px] text-muted-foreground tabular-nums" title={BOTH_TIMES_TITLE}>
+                      {bothTimesParts(v.minutes_left, v.ai_minutes_left).map((t) => (
+                        <span key={t} className="whitespace-nowrap">
+                          {t}
+                        </span>
+                      ))}
                     </span>
                   </span>
                 </button>
