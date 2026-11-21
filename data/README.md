@@ -10,6 +10,8 @@ Lint skips this folder on purpose. Changes go in small PRs from the `data` branc
 | 3 | `03_weather.py` | Open-Meteo ERA5 hourly per fire, **Algeria first** | 10,000 calls / day (free) |
 | 4 | `04_terrain_fuel.py` | Copernicus DEM 90 m + ESA WorldCover 10 m onto each fire's 375 m grid (remote COG reads) | — |
 | 5 | `05_build_table.py` | → `data/out/train.parquet` | — |
+| 6 | `06_places_replay.py --export-dir <export>` | → `places.parquet`, `replay_passes.parquet` (API); `--events`: `events_replay.parquet` | seconds |
+| 7 | `07_holdout_dense.py` | every cell around the holdout fires → `holdout_dense.parquet`; `--events`: `events_dense.parquet` | ~1 min |
 
 Run it **on a laptop**: the sources block cloud sandboxes. `make data` runs all 5 in order. Check each script's
 arguments first, since the Makefile only knows the `--export` flag of step 2.
@@ -21,6 +23,8 @@ arguments first, since the Makefile only knows the `--export` flag of step 2.
 | `out/train.parquet` | `model/` | see `docs/contracts.md` → Data contract |
 | `out/places.parquet` | `api/impact.py` | `id, name, lat, lon` (+ optional `name_ar`); the 10,258 OSM settlements from the Algeria Fire Map export |
 | `out/replay_passes.parquet` | `api/replay.py` | `holdout, t, lat, lon` (+ optional `satellite, frp`); one row per burning cell per pass, for the 2 held-out fires |
+| `out/holdout_dense.parquet` | `model/villages.py` (`make evaluate`) | `train.parquet` columns + `holdout, grid_lat0, grid_lon0, grid_mlon`; every cell, not sampled |
+| `out/events_replay.parquet`, `out/events_dense.parquet` | `model/crossval.py` only | same two shapes for `config.yaml → crossval.events`; the API and training never read them |
 
 Until `places` and `replay_passes` exist, the API serves stub villages and one synthetic fire, both flagged as stub.
 
