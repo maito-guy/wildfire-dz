@@ -1,5 +1,6 @@
 """api.weather.get_wind with mocked HTTP: forecast, archive (ERA5), fallback, cache."""
 import asyncio
+import copy
 import datetime as dt
 
 import httpx
@@ -10,6 +11,8 @@ from api.main import app
 from core.config import load_config
 
 CFG = load_config()
+CFG0 = copy.deepcopy(CFG)
+CFG0["forecast"]["mean_hours"] = 0          # the nearest hour only: exact single-hour values below
 LAT, LON = 36.65, 4.10
 
 
@@ -29,10 +32,10 @@ def _client(handler, calls):
     return httpx.AsyncClient(transport=httpx.MockTransport(wrapped))
 
 
-def _run(at, handler, calls):
+def _run(at, handler, calls, cfg=CFG0):
     async def go():
         async with _client(handler, calls) as c:
-            return await weather.get_wind(LAT, LON, at, CFG, client=c)
+            return await weather.get_wind(LAT, LON, at, cfg, client=c)
     return asyncio.run(go())
 
 
@@ -98,3 +101,41 @@ def test_predict_offline_falls_back():
     p = TestClient(app).post("/predict", json={"burning": [{"lat": LAT, "lon": LON}]}).json()
     assert p["wind_source"] == "config_default"
     assert p["wind"] == {k: float(v) for k, v in CFG["weather_default"].items()}
+
+
+# ---- forecast.mean_hours > 0: the wind the model was trained on (wind_speed_2h / wind_from_2h)
+
+def test_mean_over_the_next_hours():
+    at = dt.datetime(2021, 8, 9, 12, tzinfo=dt.UTC)
+    wind, src = _run(at, lambda r: httpx.Response(200, json=_hourly(at.date())), [], cfg=CFG)
+    assert CFG["forecast"]["mean_hours"] == 2
+    assert src == "reanalysis" and wind == {"speed_kmh": 43.0, "from_deg": 200.0}   # 42, 43, 44 km/h at 12-14 h
+
+
+def test_mean_direction_is_a_vector_mean():
+    assert weather.mean_wind([{"speed_kmh": 10, "from_deg": 350}, {"speed_kmh": 10, "from_deg": 10}]) == \
+        {"speed_kmh": 9.85, "from_deg": 0.0}                                         # north, not south
+    w = weather.mean_wind([{"speed_kmh": 20, "from_deg": 90}, {"speed_kmh": 20, "from_deg": 270}])
+    assert w["speed_kmh"] == 0                                                       # opposite winds cancel
+
+
+def test_mean_crosses_midnight():
+    at = dt.datetime(2021, 8, 9, 23, tzinfo=dt.UTC)
+    days = [at.date(), at.date() + dt.timedelta(days=1)]
+
+    def two_days(request):
+        a, b = (_hourly(d, speed=10.0)["hourly"] for d in days)
+        return httpx.Response(200, json={"hourly": {k: a[k] + b[k] for k in a}})
+    calls = []
+    wind, src = _run(at, two_days, calls, cfg=CFG)
+    assert calls[0].url.params["start_date"] == "2021-08-09" and calls[0].url.params["end_date"] == "2021-08-10"
+    assert wind == {"speed_kmh": 18.0, "from_deg": 200.0}                           # 33 at 23 h, then 10 and 11
+
+
+def test_north_wind_360_becomes_0():
+    """Open-Meteo reports due north as 360 deg; Wind.from_deg must be < 360 or /predict answers 500."""
+    at = dt.datetime(2021, 8, 9, 12, tzinfo=dt.UTC)
+    for cfg in (CFG0, CFG):
+        weather._cache.clear()
+        wind, src = _run(at, lambda r: httpx.Response(200, json=_hourly(at.date(), deg=360.0)), [], cfg=cfg)
+        assert src == "reanalysis" and wind["from_deg"] == 0.0
